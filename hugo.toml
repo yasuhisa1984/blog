@@ -8,7 +8,7 @@ theme = 'PaperMod'
 
 [params]
   env = "production"
-  description = "フリーランスエンジニアのブログ"
+  description = "消耗しない働き方と、堅実な設計を考えるエンジニアブログ"
   author = "yasuhisa"
   defaultTheme = "auto"
   ShowReadingTime = true
@@ -19,13 +19,29 @@ theme = 'PaperMod'
   ShowToc = true
   TocOpen = false
 
-  [params.homeInfoParams]
-    Title = "Code & Insights"
-    Content = "技術と洞察を共有するブログ"
+  [params.profileMode]
+    enabled = true
+    title = "Code & Insights"
+    subtitle = "消耗しない働き方と、堅実な設計を考える"
+    imageUrl = "/images/profile.png"
+    imageWidth = 150
+    imageHeight = 150
+    imageTitle = "Profile"
+
+    [[params.profileMode.buttons]]
+      name = "Posts"
+      url = "/posts/"
+    [[params.profileMode.buttons]]
+      name = "About"
+      url = "/about/"
 
   [[params.socialIcons]]
     name = "github"
     url = "https://github.com/yasuhisa1984"
+
+  [[params.socialIcons]]
+    name = "email"
+    url = "mailto:penmouse275@gmail.com"
 
 [menu]
   [[menu.main]]
