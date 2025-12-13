@@ -5,7 +5,7 @@ date: 2025-12-13
 tags: ["RaspberryPi", "Tailscale", "Claude", "自宅サーバー", "インフラ"]
 draft: false
 cover:
-  image: "/images/covers/raspberry-pi.jpg"
+  image: "images/covers/raspberry-pi.jpg"
   alt: "Raspberry Pi 5 サーバー構成"
   relative: false
 ---

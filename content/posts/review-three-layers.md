@@ -5,7 +5,7 @@ draft: false
 tags: ["レビュー", "設計", "仕事術", "運用"]
 description: "コードレビューで消耗する原因と、L1（事故）/L2（運用）/L3（好み）の三段階で指摘を整理し、背負いすぎない方法"
 cover:
-  image: "/images/covers/review.jpg"
+  image: "images/covers/review.jpg"
   alt: "レビューで疲れないための三つのレイヤー"
   relative: false
 ---
