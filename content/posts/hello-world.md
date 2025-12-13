@@ -4,6 +4,10 @@ date: 2024-12-13
 draft: false
 tags: ["雑記"]
 description: "仕事で考えたこと・判断の基準・試行錯誤のメモを残す場所として"
+cover:
+  image: "/images/covers/hello.jpg"
+  alt: "ブログをはじめます"
+  relative: false
 ---
 
 このブログでは、仕事や実務の中で考えたこと・判断の基準・試行錯誤のメモを残していきます。

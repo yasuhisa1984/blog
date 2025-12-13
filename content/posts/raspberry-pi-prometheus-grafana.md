@@ -4,6 +4,10 @@ date: 2025-12-13
 draft: false
 tags: ["RaspberryPi", "Prometheus", "Grafana", "監視", "インフラ", "Docker"]
 description: "自宅マルチサーバー環境を一元監視するPrometheus + Grafana基盤の構築記録"
+cover:
+  image: "/images/covers/monitoring.jpg"
+  alt: "Prometheus + Grafana監視基盤"
+  relative: false
 ---
 
 ## はじめに

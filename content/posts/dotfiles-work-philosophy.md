@@ -4,6 +4,10 @@ date: 2025-12-13
 draft: false
 tags: ["dotfiles", "vim", "tmux", "wezterm", "仕事道具"]
 description: "Vim/Neovimを使い続ける理由は速さではない。dotfilesに現れる仕事の流儀と、思考を止めずに手を動かし続けるための道具選び"
+cover:
+  image: "/images/covers/terminal.jpg"
+  alt: "dotfilesと仕事の流儀"
+  relative: false
 ---
 
 ## この記事で書きたいこと

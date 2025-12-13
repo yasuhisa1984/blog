@@ -4,6 +4,10 @@ date: 2025-12-13
 draft: false
 tags: ["設計", "ビジネス", "判断基準", "過剰設計"]
 description: "過剰設計を避け、限られたリソースで戦う会社のエンジニアとして何をやらないかを決める判断基準"
+cover:
+  image: "/images/covers/business.jpg"
+  alt: "ビジネス合理性を優先する"
+  relative: false
 ---
 
 ## この記事で言いたいこと
