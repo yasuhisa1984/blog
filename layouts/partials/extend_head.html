@@ -1,0 +1,37 @@
+<!-- Mermaid JS for diagram rendering -->
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    // Convert code blocks with language-mermaid to mermaid divs
+    document.querySelectorAll('pre code.language-mermaid').forEach(function(codeBlock) {
+      var pre = codeBlock.parentNode;
+      var div = document.createElement('div');
+      div.className = 'mermaid';
+      div.textContent = codeBlock.textContent;
+      pre.parentNode.replaceChild(div, pre);
+    });
+
+    // Initialize mermaid
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'neutral',
+      securityLevel: 'loose',
+      flowchart: {
+        useMaxWidth: true,
+        htmlLabels: true
+      }
+    });
+  });
+</script>
+<style>
+  .mermaid {
+    text-align: center;
+    margin: 1em 0;
+    background: #f8f9fa;
+    padding: 1em;
+    border-radius: 8px;
+  }
+  .dark .mermaid {
+    background: #1e1e1e;
+  }
+</style>
