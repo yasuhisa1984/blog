@@ -2,7 +2,6 @@ baseURL = 'https://yasuhisa1984.github.io/blog/'
 languageCode = 'ja'
 title = 'Code & Insights'
 theme = 'PaperMod'
-relativeURLs = true
 
 [pagination]
   pagerSize = 10
@@ -31,10 +30,10 @@ relativeURLs = true
 
     [[params.profileMode.buttons]]
       name = "Posts"
-      url = "posts/"
+      url = "/blog/posts/"
     [[params.profileMode.buttons]]
       name = "About"
-      url = "about/"
+      url = "/blog/about/"
 
   [[params.socialIcons]]
     name = "github"
@@ -48,17 +47,17 @@ relativeURLs = true
   [[menu.main]]
     identifier = "posts"
     name = "Posts"
-    url = "posts/"
+    url = "/blog/posts/"
     weight = 10
   [[menu.main]]
     identifier = "about"
     name = "About"
-    url = "about/"
+    url = "/blog/about/"
     weight = 20
   [[menu.main]]
     identifier = "tags"
     name = "Tags"
-    url = "tags/"
+    url = "/blog/tags/"
     weight = 30
 
 [outputs]
