@@ -6,6 +6,30 @@ tags: ["システム設計", "非同期処理", "アーキテクチャ", "メッ
 description: "ProducerとConsumerの分離は単なるパフォーマンスの話ではない。「どこまで成功すれば責任を果たしたと言えるか」を明確にすることで、障害時の混乱を防ぐ設計思想について解説する。"
 ---
 
+```mermaid
+flowchart LR
+    subgraph Producer["📤 Producer"]
+        P[注文API]
+    end
+
+    subgraph Queue["📬 Queue"]
+        Q[(メッセージ)]
+    end
+
+    subgraph Consumer["📥 Consumer"]
+        C1[在庫引当]
+        C2[メール送信]
+    end
+
+    P -->|責任完了| Q
+    Q --> C1
+    Q --> C2
+
+    style Producer fill:#e1f5fe
+    style Queue fill:#fff3e0
+    style Consumer fill:#e8f5e9
+```
+
 ## 障害対応で一番つらいのは「犯人探し」
 
 深夜の障害対応を想像してほしい。

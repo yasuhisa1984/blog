@@ -6,6 +6,37 @@ tags: ["開発環境", "生産性", "モバイル", "ツール"]
 description: "フル開発はできなくても「考える・確認する」ことはできる。スマホでも、環境を整えれば十分に価値のある作業ができる。開発は「PCを開いた瞬間」だけではない。"
 ---
 
+```mermaid
+flowchart LR
+    subgraph Mobile["📱 スマホ"]
+        T[Terminus]
+        TP[TablePlus]
+    end
+
+    subgraph Server["🖥️ サーバー"]
+        SSH[SSH接続]
+        LOG[ログ確認]
+        DB[(データベース)]
+    end
+
+    subgraph Actions["✅ できること"]
+        A1[確認する]
+        A2[読む]
+        A3[考える]
+    end
+
+    T --> SSH
+    T --> LOG
+    TP --> DB
+    SSH --> A1
+    LOG --> A2
+    DB --> A3
+
+    style Mobile fill:#e3f2fd
+    style Server fill:#f3e5f5
+    style Actions fill:#e8f5e9
+```
+
 ## 通勤時間、なんかもったいなくない？
 
 片道45分。往復で1時間半。週5日で7時間半。

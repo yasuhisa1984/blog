@@ -6,6 +6,29 @@ tags: ["システム設計", "AI", "設計レビュー", "可視化"]
 description: "図を書けない設計は、だいたい理解されていない。AIは「理解したふり」をしないので、設計の穴をそのまま図に出す。AIに図を書かせること自体が、最高の設計レビューになる。"
 ---
 
+```mermaid
+flowchart LR
+    subgraph Input["💭 曖昧な設計"]
+        D[設計説明]
+    end
+
+    AI[🤖 AI]
+
+    subgraph Output["🔍 可視化された問題"]
+        F1[矢印多すぎ]
+        F2[責務重複]
+        F3[循環依存]
+    end
+
+    D --> AI
+    AI --> F1
+    AI --> F2
+    AI --> F3
+
+    style Input fill:#fff3e0
+    style Output fill:#ffebee
+```
+
 ## コードは書けるのに、説明できない
 
 「ここの処理、図にしてもらえますか？」
