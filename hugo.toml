@@ -38,10 +38,10 @@ theme = 'PaperMod'
 
     [[params.profileMode.buttons]]
       name = "Posts"
-      url = "/blog/posts/"
+      url = "/posts/"
     [[params.profileMode.buttons]]
       name = "About"
-      url = "/blog/about/"
+      url = "/about/"
 
   [[params.socialIcons]]
     name = "github"
@@ -55,17 +55,17 @@ theme = 'PaperMod'
   [[menu.main]]
     identifier = "posts"
     name = "Posts"
-    url = "/blog/posts/"
+    url = "/posts/"
     weight = 10
   [[menu.main]]
     identifier = "about"
     name = "About"
-    url = "/blog/about/"
+    url = "/about/"
     weight = 20
   [[menu.main]]
     identifier = "tags"
     name = "Tags"
-    url = "/blog/tags/"
+    url = "/tags/"
     weight = 30
 
 [outputs]
