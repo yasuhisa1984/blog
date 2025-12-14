@@ -4,6 +4,10 @@ date: 2024-12-14
 draft: false
 tags: ["システム設計", "AI", "設計レビュー", "可視化"]
 description: "図を書けない設計は、だいたい理解されていない。AIは「理解したふり」をしないので、設計の穴をそのまま図に出す。AIに図を書かせること自体が、最高の設計レビューになる。"
+cover:
+  image: "https://images.unsplash.com/photo-1633356122544-f134324a6cee?w=800"
+  alt: "AIとダイアグラム"
+  relative: false
 ---
 
 ```mermaid

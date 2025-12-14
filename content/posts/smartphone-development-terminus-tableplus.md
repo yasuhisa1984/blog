@@ -4,6 +4,10 @@ date: 2024-12-14
 draft: false
 tags: ["開発環境", "生産性", "モバイル", "ツール"]
 description: "フル開発はできなくても「考える・確認する」ことはできる。スマホでも、環境を整えれば十分に価値のある作業ができる。開発は「PCを開いた瞬間」だけではない。"
+cover:
+  image: "https://images.unsplash.com/photo-1512941937669-90a1b58e7e9c?w=800"
+  alt: "スマートフォンでコーディング"
+  relative: false
 ---
 
 ```mermaid

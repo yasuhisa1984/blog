@@ -4,6 +4,10 @@ date: 2024-12-14
 draft: false
 tags: ["システム設計", "業務改善", "非同期処理", "バックオフィス"]
 description: "キューは非同期処理のための技術ではない。本質は「人間の判断・作業を待たせられる構造」を作ること。正しく使えば、入力・確認・やり直しの回数が激減する。"
+cover:
+  image: "https://images.unsplash.com/photo-1534723452862-4c874018d66d?w=800"
+  alt: "整然と並んだ郵便受け"
+  relative: false
 ---
 
 ```mermaid
