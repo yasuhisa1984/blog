@@ -6,6 +6,10 @@ theme = 'PaperMod'
 [pagination]
   pagerSize = 10
 
+[services]
+  [services.googleAnalytics]
+    ID = "G-XXXXXXXXXX"  # ここにGA4の測定IDを入れてください
+
 [params]
   env = "production"
   description = "消耗しない働き方と、堅実な設計を考えるエンジニアブログ"
@@ -18,6 +22,10 @@ theme = 'PaperMod'
   ShowCodeCopyButtons = true
   ShowToc = true
   TocOpen = false
+
+  [params.analytics]
+    [params.analytics.google]
+      SiteVerificationTag = ""  # Google Search Console用（任意）
 
   [params.profileMode]
     enabled = true
