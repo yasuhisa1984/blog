@@ -2,6 +2,7 @@
 title: "メッセージキュー実践ガイド：Q4MからKafkaまで、非同期処理の設計と運用"
 date: 2025-12-13
 draft: false
+categories: ["システム設計"]
 tags: ["メッセージキュー", "Redis", "Kafka", "RabbitMQ", "Q4M", "非同期処理", "システム設計", "実務"]
 description: "同期処理の限界を超えるメッセージキューの設計・実装・運用。Q4M、Redis、RabbitMQ、Kafka、SQSの比較と使い分け、障害対応まで完全網羅"
 cover:

@@ -2,6 +2,7 @@
 title: "Rate Limiting完全理解：アルゴリズムから実装、分散環境での運用まで"
 date: 2025-12-14
 draft: false
+categories: ["システム設計"]
 tags: ["Rate Limiting", "API", "セキュリティ", "システム設計", "Redis"]
 description: "なぜRate Limitingが必要か、各アルゴリズムの特徴と使い分け、Redis/Nginxでの実装、分散環境での課題と解決策、429レスポンスの正しい返し方まで実務で必要な知識を網羅。"
 cover:

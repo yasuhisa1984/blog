@@ -2,6 +2,7 @@
 title: "コンテキストウィンドウを制する者がAI開発を制す"
 date: 2025-12-13
 draft: false
+categories: ["AI・開発ツール"]
 tags: ["AI", "Claude Code", "LLM", "開発効率化", "実務"]
 description: "なぜAIに長文を投げると忘れられるのか。コンテキストウィンドウの本質を理解し、効率的なAI開発を実現する方法。"
 cover:

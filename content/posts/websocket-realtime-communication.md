@@ -2,6 +2,7 @@
 title: "WebSocket完全理解：リアルタイム通信の設計と実装"
 date: 2025-12-14
 draft: false
+categories: ["システム設計"]
 tags: ["WebSocket", "リアルタイム", "システム設計", "実務", "Socket.IO"]
 description: "HTTPの限界からWebSocketが必要な理由、ポーリングとの違い、実装パターン、スケールアウト時の課題と解決策まで。チャット、通知、株価更新など実務でのユースケースを交えて解説。"
 cover:

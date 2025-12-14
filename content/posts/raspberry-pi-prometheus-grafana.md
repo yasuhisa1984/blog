@@ -2,6 +2,7 @@
 title: "Raspberry Piで構築するPrometheus + Grafana監視基盤"
 date: 2025-12-13
 draft: false
+categories: ["インフラ・運用"]
 tags: ["RaspberryPi", "Prometheus", "Grafana", "監視", "インフラ", "Docker"]
 description: "自宅マルチサーバー環境を一元監視するPrometheus + Grafana基盤の構築記録"
 cover:

@@ -2,6 +2,7 @@
 title: "キャッシュは一種類じゃない。層で考えるキャッシュ戦略"
 date: 2025-12-13
 draft: false
+categories: ["システム設計"]
 tags: ["キャッシュ", "Redis", "CDN", "パフォーマンス", "システム設計", "インフラ", "実務"]
 description: "ブラウザからCPUまで、7層のキャッシュを完全解説。Cache-Aside、Write-Through、TTL設計、キャッシュ雪崩対策まで、実務で使えるキャッシュ戦略の全て"
 cover:

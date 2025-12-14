@@ -2,6 +2,7 @@
 title: "実務で使うDocker障害調査の徹底ガイド"
 date: 2025-12-13
 draft: false
+categories: ["インフラ・運用"]
 tags: ["Docker", "コンテナ", "障害対応", "トラブルシューティング", "運用", "インフラ", "実務"]
 description: "コンテナが起動しない、OOMKilled、ネットワーク疎通不可、ディスク枯渇まで。本番Docker環境の障害調査を完全網羅"
 cover:

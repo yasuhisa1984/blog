@@ -2,6 +2,7 @@
 title: "ECS Fargate完全理解：コンテナ実行基盤の抽象化と使い分け"
 date: 2025-12-14
 draft: false
+categories: ["システム設計"]
 tags: ["AWS", "ECS", "Fargate", "コンテナ", "サーバーレス", "システム設計"]
 description: "ECS Fargateとは何か、他社サービスとの比較、Lambdaとの使い分け、実務での選択基準を徹底解説。「コンテナを動かしたい」だけなのに、なぜこんなに選択肢があるのか。抽象度の違いから理解する。"
 cover:

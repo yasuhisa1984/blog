@@ -2,6 +2,7 @@
 title: "サーバーレスで激安開発：Lambdaエイリアスで実現するBlue-Greenデプロイ完全ガイド"
 date: 2025-12-13
 draft: false
+categories: ["インフラ・運用"]
 tags: ["AWS", "Lambda", "サーバーレス", "Blue-Green", "デプロイ", "コスト削減", "Terraform", "実務"]
 description: "月額数百円から始めるサーバーレス開発。Lambdaのバージョン・エイリアスでdev/prodを分離し、安全なBlue-Greenデプロイを実現。UIを捨てて顧客が喜ぶ設計思想まで"
 cover:

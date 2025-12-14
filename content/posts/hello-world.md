@@ -2,6 +2,7 @@
 title: "ブログをはじめます"
 date: 2024-12-13
 draft: false
+categories: ["働き方・思想"]
 tags: ["雑記"]
 description: "仕事で考えたこと・判断の基準・試行錯誤のメモを残す場所として"
 cover:

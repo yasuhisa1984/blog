@@ -2,6 +2,7 @@
 title: "Raspberry Pi 5で構築する実務レベル自宅サーバー構成"
 description: "app / db / lvs 分離構成 × Tailscale × Claude CLI によるAI支援開発環境の紹介"
 date: 2025-12-13
+categories: ["インフラ・運用"]
 tags: ["RaspberryPi", "Tailscale", "Claude", "自宅サーバー", "インフラ"]
 draft: false
 cover:

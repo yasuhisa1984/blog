@@ -2,6 +2,7 @@
 title: "Producer と Consumer を分けると、なぜ「責任境界」が明確になるのか"
 date: 2024-12-14
 draft: false
+categories: ["システム設計"]
 tags: ["システム設計", "非同期処理", "アーキテクチャ", "メッセージキュー"]
 description: "ProducerとConsumerの分離は単なるパフォーマンスの話ではない。「どこまで成功すれば責任を果たしたと言えるか」を明確にすることで、障害時の混乱を防ぐ設計思想について解説する。"
 cover:

@@ -2,6 +2,7 @@
 title: "Claude Code おすすめスキル：図の生成からMCPサーバーまで"
 date: 2025-12-14
 draft: false
+categories: ["AI・開発ツール"]
 tags: ["Claude Code", "AI", "開発ツール", "MCP", "生産性"]
 description: "Claude Codeを使い倒すための実践テクニック。MCPサーバー、カスタムコマンド、フック、Mermaidによる図の生成まで。知っているかどうかで生産性が大きく変わる機能を紹介。"
 cover:
@@ -536,6 +537,7 @@ hugo new posts/記事名.md
 title: "記事タイトル"
 date: 2024-12-14
 draft: false
+categories: ["AI・開発ツール"]
 tags: ["タグ1", "タグ2"]
 description: "記事の説明"
 cover:

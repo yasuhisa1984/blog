@@ -2,6 +2,7 @@
 title: "tmuxp完全ガイド：YAMLひとつで開発環境を一瞬で再現する"
 date: 2024-12-14
 draft: false
+categories: ["AI・開発ツール"]
 tags: ["開発環境", "tmux", "生産性", "ターミナル", "自動化"]
 description: "tmuxpを使えば、プロジェクトごとの開発環境をYAMLファイルで定義し、コマンド一発で再現できる。毎朝の「開発環境構築」を自動化し、本当の仕事に集中しよう。"
 cover:

@@ -2,6 +2,7 @@
 title: "dotfilesとは何か？僕の開発環境と仕事の流儀"
 date: 2025-12-13
 draft: false
+categories: ["AI・開発ツール"]
 tags: ["dotfiles", "vim", "Neovim", "tmux", "wezterm", "開発環境", "初心者向け"]
 description: "dotfilesの基本から、Neovim・tmux・WeTermの使い方、なぜこの構成を選んだのかまで。開発環境に現れる仕事の流儀を解説"
 cover:

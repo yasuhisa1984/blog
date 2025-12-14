@@ -54,19 +54,24 @@ theme = 'PaperMod'
 [menu]
   [[menu.main]]
     identifier = "posts"
-    name = "Posts"
+    name = "All Posts"
     url = "/posts/"
     weight = 10
   [[menu.main]]
-    identifier = "about"
-    name = "About"
-    url = "/about/"
+    identifier = "categories"
+    name = "Categories"
+    url = "/categories/"
     weight = 20
   [[menu.main]]
     identifier = "tags"
     name = "Tags"
     url = "/tags/"
     weight = 30
+  [[menu.main]]
+    identifier = "about"
+    name = "About"
+    url = "/about/"
+    weight = 40
 
 [outputs]
   home = ["HTML", "RSS", "JSON"]
