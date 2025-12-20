@@ -38,10 +38,10 @@ theme = 'PaperMod'
 
     [[params.profileMode.buttons]]
       name = "Posts"
-      url = "/posts/"
+      url = "/blog/posts/"
     [[params.profileMode.buttons]]
       name = "About"
-      url = "/about/"
+      url = "/blog/about/"
 
   [[params.socialIcons]]
     name = "github"
@@ -49,7 +49,7 @@ theme = 'PaperMod'
 
   [[params.socialIcons]]
     name = "email"
-    url = "mailto:penmouse275@gmail.com"
+    url = "/blog/contact/"
 
 [menu]
   [[menu.main]]
@@ -72,6 +72,11 @@ theme = 'PaperMod'
     name = "About"
     url = "/about/"
     weight = 40
+  [[menu.main]]
+    identifier = "contact"
+    name = "Contact"
+    url = "/contact/"
+    weight = 50
 
 [outputs]
   home = ["HTML", "RSS", "JSON"]
