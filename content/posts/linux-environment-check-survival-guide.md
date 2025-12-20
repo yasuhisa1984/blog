@@ -11,21 +11,6 @@ cover:
   relative: false
 ---
 
-## 記事タイトル案（10個）
-
-1. **「コードには書いてない」を15分で暴く：Linux環境調査サバイバルガイド** ← 採用
-2. 「1年目で知るだろ」と言われる前に読む、Linux運用調査の全技術
-3. repo外運用を丸裸にする：SSH・cron・設定ファイル完全調査マニュアル
-4. マウントされないためのLinux調査術：初動15分で8割を潰す方法
-5. 「見える化されてない」を技術で殴る：レガシー運用調査チェックリスト
-6. コードだけ見ても分からない問題を、コマンド1発で解決する方法
-7. cronが動かない、SSHが通らない、ログがない——全部この記事で解決する
-8. アプリエンジニアのためのLinux運用調査入門：知らないと詰む15のポイント
-9. 「どこに設定があるか分からない」を二度と言わないための調査チェックリスト
-10. インフラ知識ゼロからの脱出：Linux環境を完全把握する実践ガイド
-
----
-
 ## TL;DR
 
 - **コードを見ても分からない「repo外運用」** は、SSH設定・cron・環境変数・ログ出力先に埋まっている
@@ -47,7 +32,11 @@ cover:
    - ログ / 出力先
    - パーミッション / 所有者
    - ネットワーク / 疎通
-4. [具体例：log-torukun監視スクリプトの調査](#具体例log-torukun監視スクリプトの調査)
+   - プロセス / 実行状況
+   - ディスク / メモリ / システムリソース
+   - サービス / デーモン管理
+   - 操作履歴 / コマンド履歴
+4. [具体例：batch-user監視スクリプトの調査](#具体例batch-user監視スクリプトの調査)
 5. [付録：深掘り調査テクニック](#付録深掘り調査テクニック)
 6. [調査結果メモテンプレート](#調査結果メモテンプレート)
 7. [「repo外運用」を減らすための改善ロードマップ](#repo外運用を減らすための改善ロードマップ)
@@ -131,7 +120,7 @@ grep -n "include\|require\|\.ini\|\.conf\|config" /path/to/script.php
 crontab -l
 
 # 他のユーザーの crontab（root権限必要）
-sudo crontab -l -u log-torukun
+sudo crontab -l -u batch-user
 
 # システム全体の cron
 ls -la /etc/cron.d/
@@ -147,15 +136,15 @@ sudo grep -r "script.php" /var/spool/cron/* 2>/dev/null
 
 ```bash
 # 実行ユーザーの SSH 設定
-sudo cat /home/log-torukun/.ssh/config
-sudo ls -la /home/log-torukun/.ssh/
+sudo cat /home/batch-user/.ssh/config
+sudo ls -la /home/batch-user/.ssh/
 
 # known_hosts の確認
-sudo cat /home/log-torukun/.ssh/known_hosts
+sudo cat /home/batch-user/.ssh/known_hosts
 
 # 鍵ファイルの確認
-sudo ls -la /home/log-torukun/.ssh/*.pub
-sudo ls -la /home/log-torukun/.ssh/id_*
+sudo ls -la /home/batch-user/.ssh/*.pub
+sudo ls -la /home/batch-user/.ssh/id_*
 ```
 
 ### 4. 最近のログ・エラーを確認（3分）
@@ -182,7 +171,7 @@ sudo tail -100 /var/log/myapp/cron.log
 ps aux | grep "script.php"
 
 # 関連プロセス
-ps aux | grep "log-torukun"
+ps aux | grep "batch-user"
 
 # SSH 接続中のプロセス
 ps aux | grep ssh
@@ -226,8 +215,8 @@ cat /etc/passwd
 awk -F: '$3 >= 1000 && $3 < 65534 {print $1, $3, $6, $7}' /etc/passwd
 
 # 特定ユーザーの詳細を確認
-getent passwd log-torukun
-# 出力例: log-torukun:x:1001:1001:Log Monitor User:/home/log-torukun:/bin/bash
+getent passwd batch-user
+# 出力例: batch-user:x:1001:1001:Log Monitor User:/home/batch-user:/bin/bash
 
 # /etc/passwd の見方
 # ユーザー名:パスワード:UID:GID:コメント:ホームディレクトリ:シェル
@@ -260,8 +249,8 @@ sudo cat /etc/sudoers.d/*
 cat /etc/group
 
 # 特定ユーザーの所属グループ
-id log-torukun
-groups log-torukun
+id batch-user
+groups batch-user
 
 # 特定グループのメンバー
 getent group docker
@@ -341,8 +330,8 @@ sudo cat /home/<user>/.ssh/config
 # SSH config で実際に解決される設定を見る（超重要）
 ssh -G <host>
 
-# 例：log-torukun ユーザーが worker-server に接続する設定
-sudo -u log-torukun ssh -G worker-server
+# 例：batch-user ユーザーが worker-server に接続する設定
+sudo -u batch-user ssh -G worker-server
 
 # ========================================
 # 鍵ファイルの確認
@@ -432,7 +421,7 @@ crontab -l
 crontab -l
 
 # 特定ユーザーの crontab（root権限必要）
-sudo crontab -l -u log-torukun
+sudo crontab -l -u batch-user
 sudo crontab -l -u www-data
 sudo crontab -l -u root
 
@@ -562,6 +551,39 @@ PATH=/usr/local/bin:/usr/bin:/bin
 * * * * * /path/to/script.sh
 ```
 
+#### タイムゾーンの罠
+
+```bash
+# ========================================
+# タイムゾーンの確認
+# ========================================
+
+# システムのタイムゾーン
+timedatectl
+cat /etc/timezone           # Debian/Ubuntu
+
+# 現在時刻
+date
+date +"%Y-%m-%d %H:%M:%S %Z"
+
+# ========================================
+# cron のタイムゾーン問題
+# ========================================
+
+# 問題：サーバーが UTC で cron が期待通りに動かない
+# → JST 9:00 に実行したいのに、UTC 9:00（JST 18:00）に実行される
+
+# 確認
+timedatectl | grep "Time zone"
+
+# 解決策1：crontab で TZ を指定
+TZ=Asia/Tokyo
+0 9 * * * /path/to/script.sh  # JST 9:00 に実行
+
+# 解決策2：UTC で計算して設定（JST 9:00 = UTC 0:00）
+0 0 * * * /path/to/script.sh
+```
+
 #### 次の一手
 
 ```bash
@@ -668,7 +690,7 @@ tail -100 /var/log/myapp.log
 
 # リダイレクトがない場合 → メールに送られる
 # /var/mail/<user> を確認
-cat /var/mail/log-torukun
+cat /var/mail/batch-user
 
 # ========================================
 # syslog / journal
@@ -706,7 +728,7 @@ find /var/log -mmin -60 -type f 2>/dev/null
 lsof -p <PID>
 
 # 特定ユーザーが開いているファイル
-lsof -u log-torukun
+lsof -u batch-user
 
 # 特定ファイルを開いているプロセス
 lsof /var/log/myapp.log
@@ -759,8 +781,8 @@ ls -laR /path/to/dir/
 # ========================================
 
 # そのユーザーとして実行
-sudo -u log-torukun cat /path/to/config.ini
-sudo -u log-torukun ls -la /path/to/dir/
+sudo -u batch-user cat /path/to/config.ini
+sudo -u batch-user ls -la /path/to/dir/
 
 # ========================================
 # 特殊なパーミッション
@@ -912,7 +934,373 @@ ss -tlnp
 
 ---
 
-## 具体例：log-torukun監視スクリプトの調査
+### 8. プロセス / 実行状況
+
+#### 目的
+スクリプトやアプリケーションが実行中か、どのように動いているかを把握する
+
+#### 確認コマンド
+
+```bash
+# ========================================
+# プロセスの確認
+# ========================================
+
+# 全プロセス一覧
+ps aux
+
+# 特定のプロセスを探す
+ps aux | grep "script.php"
+ps aux | grep "python"
+ps aux | grep "node"
+
+# プロセスツリー（親子関係を表示）
+pstree -p
+pstree -p <PID>
+
+# 特定ユーザーのプロセス
+ps -u batch-user
+
+# ========================================
+# リアルタイム監視
+# ========================================
+
+# top（CPU/メモリ使用率のリアルタイム表示）
+top
+top -u batch-user  # 特定ユーザーのみ
+
+# htop（より見やすい版、要インストール）
+htop
+
+# 特定プロセスを監視
+watch -n 1 "ps aux | grep script.php"
+
+# ========================================
+# プロセスの詳細情報
+# ========================================
+
+# PID からプロセス情報を取得
+ps -p <PID> -f
+
+# プロセスが使用しているファイル
+lsof -p <PID>
+
+# プロセスの環境変数
+cat /proc/<PID>/environ | tr '\0' '\n'
+
+# プロセスの起動コマンド
+cat /proc/<PID>/cmdline | tr '\0' ' '
+
+# プロセスの作業ディレクトリ
+ls -la /proc/<PID>/cwd
+
+# ========================================
+# ゾンビ・孤児プロセスの確認
+# ========================================
+
+# ゾンビプロセス（Z状態）
+ps aux | awk '$8 ~ /Z/'
+
+# 親のいないプロセス（PPID=1）
+ps -ef | awk '$3 == 1'
+```
+
+#### よくあるハマり
+
+| 症状 | 原因 | 確認方法 |
+|------|------|----------|
+| プロセスが見つからない | 既に終了している / 別名で動いている | `pstree` で親子関係を確認 |
+| CPU 100% で張り付き | 無限ループ / デッドロック | `top` で確認、`strace -p <PID>` |
+| プロセスが増え続ける | fork bomb / リーク | `ps aux --sort=-%mem` |
+| cron で起動したはずがいない | すぐ終了している | ログを確認 |
+
+#### 次の一手
+
+```bash
+# プロセスが動いているか確認する流れ
+1. ps aux | grep <name>           # まず探す
+2. pstree -p <PID>                # 親子関係を確認
+3. lsof -p <PID>                  # 使用中のファイルを確認
+4. cat /proc/<PID>/environ        # 環境変数を確認
+```
+
+---
+
+### 9. ディスク / メモリ / システムリソース
+
+#### 目的
+ディスク容量・メモリ使用量などシステムリソースの状態を把握する
+
+#### 確認コマンド
+
+```bash
+# ========================================
+# ディスク使用量
+# ========================================
+
+# ファイルシステム全体
+df -h
+
+# inode 使用量（ファイル数の上限）
+df -i
+
+# 特定ディレクトリのサイズ
+du -sh /var/log/
+du -sh /home/*
+
+# 大きいファイル/ディレクトリを探す
+du -ah /var/log | sort -rh | head -20
+
+# 最近更新された大きいファイル
+find /var/log -type f -mtime -1 -size +100M
+
+# ========================================
+# メモリ使用量
+# ========================================
+
+# メモリ概要
+free -h
+
+# 詳細なメモリ情報
+cat /proc/meminfo
+
+# プロセス別メモリ使用量（上位10）
+ps aux --sort=-%mem | head -10
+
+# ========================================
+# スワップ
+# ========================================
+
+# スワップ使用状況
+swapon --show
+cat /proc/swaps
+
+# スワップを使っているプロセス
+for pid in /proc/[0-9]*; do
+  awk '/VmSwap/{print FILENAME, $2}' $pid/status 2>/dev/null
+done | sort -k2 -rn | head -10
+
+# ========================================
+# ロードアベレージ
+# ========================================
+
+# 現在の負荷
+uptime
+cat /proc/loadavg
+
+# CPU コア数（ロードアベレージの基準）
+nproc
+cat /proc/cpuinfo | grep processor | wc -l
+```
+
+#### よくあるハマり
+
+| 症状 | 原因 | 確認方法 |
+|------|------|----------|
+| ディスクフル | ログ肥大化 / 古いファイル | `du -sh /var/log/*` |
+| inode 枯渇 | 小さいファイルが大量 | `df -i`, `find / -xdev -printf '%h\n' \| sort \| uniq -c \| sort -rn \| head` |
+| メモリ不足 | リーク / キャッシュ肥大 | `free -h`, `ps aux --sort=-%mem` |
+| ロードアベレージ高い | CPU バウンド / IO wait | `top` で %wa を確認 |
+
+#### 次の一手
+
+```bash
+# ディスクフルの調査
+1. df -h                           # どこがフルか
+2. du -sh /* 2>/dev/null | sort -rh | head  # 大きいディレクトリ
+3. find /var -type f -size +100M   # 大きいファイル
+4. lsof +L1                        # 削除済みだが開いているファイル
+```
+
+---
+
+### 10. サービス / デーモン管理
+
+#### 目的
+バックグラウンドで動作するサービスの状態を把握する
+
+#### 確認コマンド
+
+```bash
+# ========================================
+# systemd（Ubuntu 16.04+, CentOS 7+）
+# ========================================
+
+# 全サービス一覧
+systemctl list-units --type=service
+
+# 稼働中のサービスのみ
+systemctl list-units --type=service --state=running
+
+# 特定サービスの状態
+systemctl status nginx
+systemctl status php-fpm
+systemctl status mysql
+
+# サービスの設定ファイルを確認
+systemctl cat nginx
+
+# サービスが有効か（自動起動）
+systemctl is-enabled nginx
+
+# 起動に失敗したサービス
+systemctl --failed
+
+# ========================================
+# サービスのログ
+# ========================================
+
+# 特定サービスのログ
+journalctl -u nginx
+journalctl -u nginx --since "1 hour ago"
+journalctl -u nginx -f  # リアルタイム
+
+# ブート以降のログ
+journalctl -b
+
+# ========================================
+# 古い init.d 形式（CentOS 6 以前など）
+# ========================================
+
+# サービス一覧
+service --status-all
+
+# 特定サービスの状態
+service nginx status
+
+# 起動スクリプトの場所
+ls -la /etc/init.d/
+
+# ========================================
+# ポートとサービスの対応
+# ========================================
+
+# どのサービスがどのポートを Listen しているか
+ss -tlnp
+netstat -tlnp  # 古い環境
+
+# 特定ポートを使っているサービス
+lsof -i :80
+lsof -i :3306
+```
+
+#### よくあるハマり
+
+| 症状 | 原因 | 確認方法 |
+|------|------|----------|
+| サービスが起動しない | 設定エラー / 依存関係 | `journalctl -u <service>` |
+| 再起動後に動かない | enabled になっていない | `systemctl is-enabled` |
+| ポートが使えない | 既に別プロセスが使用中 | `lsof -i :<port>` |
+| 設定変更が反映されない | reload していない | `systemctl reload` |
+
+#### 次の一手
+
+```bash
+# サービスが動かない時の調査
+1. systemctl status <service>      # 状態確認
+2. journalctl -u <service> -n 50   # ログ確認
+3. systemctl cat <service>         # 設定確認
+4. ss -tlnp | grep <port>          # ポート確認
+```
+
+---
+
+### 11. 操作履歴 / コマンド履歴
+
+#### 目的
+過去に誰がどんな操作をしたかを調査する（トラブルの原因特定・引き継ぎ）
+
+#### 確認コマンド
+
+```bash
+# ========================================
+# コマンド履歴
+# ========================================
+
+# 自分の履歴
+history
+history | tail -50
+
+# 履歴ファイルを直接確認
+cat ~/.bash_history
+
+# 他のユーザーの履歴（root権限必要）
+sudo cat /home/batch-user/.bash_history
+sudo cat /root/.bash_history
+
+# 全ユーザーの履歴を一括確認
+for user in $(ls /home); do
+  echo "=== $user ==="
+  sudo cat /home/$user/.bash_history 2>/dev/null | tail -20
+done
+
+# ========================================
+# 履歴の検索
+# ========================================
+
+# 特定コマンドを検索
+history | grep "crontab"
+history | grep "ssh"
+history | grep "rm"
+
+# 他ユーザーの履歴を検索
+sudo grep "deploy" /home/*/.bash_history
+
+# ========================================
+# sudo の履歴
+# ========================================
+
+# sudo で実行されたコマンド
+sudo cat /var/log/auth.log | grep sudo
+sudo cat /var/log/secure | grep sudo  # RHEL/CentOS
+
+# 最近の sudo 実行
+sudo journalctl _COMM=sudo --since "1 day ago"
+
+# ========================================
+# ファイルの変更履歴
+# ========================================
+
+# 最近変更されたファイル
+find /etc -mtime -7 -type f
+find /var/www -mtime -1 -type f
+
+# 特定ファイルの最終更新者（auditd が有効な場合）
+ausearch -f /etc/nginx/nginx.conf
+
+# ========================================
+# ログイン履歴
+# ========================================
+
+# 誰がいつログインしたか
+last | head -30
+
+# 現在ログイン中
+who
+w
+```
+
+#### よくあるハマり
+
+| 症状 | 原因 | 確認方法 |
+|------|------|----------|
+| 履歴が消えている | HISTSIZE=0 / 手動削除 | `.bashrc` の設定確認 |
+| 誰が設定を変えたか分からない | 履歴に残っていない | `last` + ファイルの mtime |
+| sudo の履歴がない | ログ設定 | `/var/log/auth.log` を確認 |
+
+#### 次の一手
+
+```bash
+# 「誰がこのファイルを変更した？」を調べる
+1. stat <file>                     # 最終更新日時
+2. last | grep "<その日時頃>"       # その頃ログインしていた人
+3. sudo cat /home/<user>/.bash_history | grep "<ファイル名>"
+4. sudo cat /var/log/auth.log | grep "<user>"  # sudo 履歴
+```
+
+---
+
+## 具体例：batch-user監視スクリプトの調査
 
 ### シナリオ
 
@@ -923,7 +1311,7 @@ ss -tlnp
 - ssh <ip> -o 'ConnectTimeout=5' tail -n 1 <logName> で最終行取得
 - 正常終了メッセージがなければ Slack 通知
 
-SSHユーザー：log-torukun
+SSHユーザー：batch-user
 問題：「たまに Slack 通知が来ない」
 ```
 
@@ -955,15 +1343,15 @@ cat /usr/local/tmp/log_check/targets.ini
 # log = /var/log/worker/batch.log
 # success_pattern = "BATCH COMPLETED"
 
-# パーミッション確認（log-torukun が読めるか）
-sudo -u log-torukun cat /usr/local/tmp/log_check/targets.ini
+# パーミッション確認（batch-user が読めるか）
+sudo -u batch-user cat /usr/local/tmp/log_check/targets.ini
 ```
 
 #### Step 3：cron の確認
 
 ```bash
-# log-torukun の crontab
-sudo crontab -l -u log-torukun
+# batch-user の crontab
+sudo crontab -l -u batch-user
 
 # 例：
 # */5 * * * * /usr/bin/php /var/www/html/cron/check_log_end.php >> /var/log/check_log/cron.log 2>&1
@@ -975,34 +1363,34 @@ sudo tail -100 /var/log/check_log/cron.log
 #### Step 4：SSH 設定の確認
 
 ```bash
-# log-torukun の SSH 設定
-sudo cat /home/log-torukun/.ssh/config
+# batch-user の SSH 設定
+sudo cat /home/batch-user/.ssh/config
 
 # 例：
 # Host production-worker
 #   HostName 192.168.1.100
-#   User log-torukun
+#   User batch-user
 #   IdentityFile ~/.ssh/id_ed25519
 #   ConnectTimeout 5
 
 # 鍵の確認
-sudo ls -la /home/log-torukun/.ssh/
+sudo ls -la /home/batch-user/.ssh/
 
 # known_hosts の確認
-sudo cat /home/log-torukun/.ssh/known_hosts | grep "192.168.1.100"
+sudo cat /home/batch-user/.ssh/known_hosts | grep "192.168.1.100"
 ```
 
 #### Step 5：SSH 接続テスト
 
 ```bash
-# log-torukun として接続テスト
-sudo -u log-torukun ssh -o ConnectTimeout=5 production-worker "echo OK"
+# batch-user として接続テスト
+sudo -u batch-user ssh -o ConnectTimeout=5 production-worker "echo OK"
 
 # 詳細ログ
-sudo -u log-torukun ssh -vvv production-worker exit 2>&1 | head -50
+sudo -u batch-user ssh -vvv production-worker exit 2>&1 | head -50
 
 # 実際のコマンドをテスト
-sudo -u log-torukun ssh production-worker "tail -n 1 /var/log/worker/batch.log"
+sudo -u batch-user ssh production-worker "tail -n 1 /var/log/worker/batch.log"
 ```
 
 #### Step 6：ネットワーク疎通
@@ -1020,13 +1408,13 @@ nc -zv 192.168.1.100 22
 ```
 ■ 原因特定
 
-1. /home/log-torukun/.ssh/known_hosts に 192.168.1.100 が登録されていなかった
+1. /home/batch-user/.ssh/known_hosts に 192.168.1.100 が登録されていなかった
 2. 初回接続時に「Are you sure you want to continue connecting?」で止まっていた
 3. cron はインタラクティブではないので、ここで失敗していた
 
 ■ 解決策
 
-sudo -u log-torukun ssh-keyscan 192.168.1.100 >> /home/log-torukun/.ssh/known_hosts
+sudo -u batch-user ssh-keyscan 192.168.1.100 >> /home/batch-user/.ssh/known_hosts
 ```
 
 ---
@@ -1040,10 +1428,10 @@ sudo -u log-torukun ssh-keyscan 192.168.1.100 >> /home/log-torukun/.ssh/known_ho
 ssh -G production-worker
 
 # 出力例：
-# user log-torukun
+# user batch-user
 # hostname 192.168.1.100
 # port 22
-# identityfile /home/log-torukun/.ssh/id_ed25519
+# identityfile /home/batch-user/.ssh/id_ed25519
 # connecttimeout 5
 
 # → コードに書かれた host名 が、実際にどの IP・ユーザー・鍵で接続されるか分かる
@@ -1116,7 +1504,7 @@ cd /var/www/html && /usr/bin/php script.php
 Permission denied (publickey).
 
 # 確認
-sudo -u log-torukun ssh -vvv host exit
+sudo -u batch-user ssh -vvv host exit
 # → 鍵のパスが違う / 権限が違う
 
 # 解決
