@@ -40,8 +40,9 @@ cover:
 1. [この記事の前提と心構え](#この記事の前提と心構え)
 2. [まず最初の15分でやること](#まず最初の15分でやること)
 3. [カテゴリ別チェックリスト](#カテゴリ別チェックリスト)
+   - ユーザー / グループ / ログイン履歴
    - SSH / 鍵 / 接続設定
-   - Cron / スケジュールジョブ
+   - Cron / スケジュールジョブ（見えないジョブも）
    - 設定ファイル / INI / 環境変数
    - ログ / 出力先
    - パーミッション / 所有者
@@ -206,7 +207,122 @@ dig <対象ホスト名> +short
 
 ## カテゴリ別チェックリスト
 
-### 1. SSH / 鍵 / 接続設定
+### 1. ユーザー / グループ / ログイン履歴
+
+#### 目的
+サーバー上にどんなユーザーがいて、誰がどの権限で動いているかを把握する
+
+#### 確認コマンド
+
+```bash
+# ========================================
+# システムユーザーの一覧
+# ========================================
+
+# /etc/passwd からユーザー一覧を取得
+cat /etc/passwd
+
+# 人間が使うユーザーだけ抽出（UID 1000以上、一般的な基準）
+awk -F: '$3 >= 1000 && $3 < 65534 {print $1, $3, $6, $7}' /etc/passwd
+
+# 特定ユーザーの詳細を確認
+getent passwd log-torukun
+# 出力例: log-torukun:x:1001:1001:Log Monitor User:/home/log-torukun:/bin/bash
+
+# /etc/passwd の見方
+# ユーザー名:パスワード:UID:GID:コメント:ホームディレクトリ:シェル
+#
+# シェルが /sbin/nologin や /bin/false → ログイン不可のサービスアカウント
+# シェルが /bin/bash や /bin/sh → ログイン可能
+
+# ========================================
+# ログインできるユーザーを特定
+# ========================================
+
+# ログイン可能なシェルを持つユーザー
+grep -v '/nologin\|/false\|/sync\|/shutdown\|/halt' /etc/passwd | cut -d: -f1
+
+# sudo 権限を持つユーザー
+grep -E '^sudo:|^wheel:' /etc/group
+getent group sudo
+getent group wheel  # RHEL/CentOS
+
+# sudoers の設定確認
+sudo cat /etc/sudoers
+sudo ls -la /etc/sudoers.d/
+sudo cat /etc/sudoers.d/*
+
+# ========================================
+# グループの確認
+# ========================================
+
+# グループ一覧
+cat /etc/group
+
+# 特定ユーザーの所属グループ
+id log-torukun
+groups log-torukun
+
+# 特定グループのメンバー
+getent group docker
+getent group www-data
+
+# ========================================
+# ログイン履歴・現在の状態
+# ========================================
+
+# 現在ログイン中のユーザー
+who
+w
+
+# 最近のログイン履歴
+last | head -20
+
+# 各ユーザーの最終ログイン日時
+lastlog
+
+# 失敗したログイン試行（セキュリティ確認）
+sudo lastb | head -20
+
+# ========================================
+# サービスアカウントの特定
+# ========================================
+
+# cron を持っているユーザーを探す
+for user in $(cut -d: -f1 /etc/passwd); do
+  sudo crontab -l -u "$user" 2>/dev/null | grep -q . && echo "$user has crontab"
+done
+
+# ホームディレクトリがあるユーザー
+ls -la /home/
+
+# 特定ディレクトリの所有者から逆引き
+stat -c "%U" /var/www/html/
+stat -c "%U" /usr/local/tmp/log_check/
+```
+
+#### よくあるハマり
+
+| 症状 | 原因 | 確認方法 |
+|------|------|----------|
+| 知らないユーザーでプロセスが動いている | サービスアカウント | `ps aux` + `getent passwd <user>` |
+| sudo できない | sudo グループに入っていない | `id <user>`, `/etc/sudoers` |
+| ログインできない | シェルが /sbin/nologin | `getent passwd <user>` |
+| 「誰がこのファイル作った？」が分からない | 所有者から逆引き | `stat -c "%U" <file>` |
+
+#### 次の一手
+
+```bash
+# 「このスクリプトを実行しているユーザー」を特定する流れ
+1. ps aux | grep script.php          # 実行中ならユーザー名が見える
+2. sudo crontab -l -u <user>         # そのユーザーの cron を確認
+3. getent passwd <user>              # ユーザーの詳細（ホームディレクトリ等）
+4. sudo ls -la /home/<user>/.ssh/    # SSH 設定があるか
+```
+
+---
+
+### 2. SSH / 鍵 / 接続設定
 
 #### 目的
 SSHで外部サーバーに接続する処理が、どの設定・どの鍵で動いているかを把握する
@@ -283,74 +399,152 @@ ssh -o ConnectTimeout=5 <user>@<host> "echo OK"
 
 ---
 
-### 2. Cron / スケジュールジョブ
+### 3. Cron / スケジュールジョブ（見えないジョブも）
 
 #### 目的
 スクリプトがいつ・誰によって・どのように実行されているかを把握する
+
+#### ⚠️ `crontab -l` で見えないケースがある
+
+```bash
+# crontab -l は「自分の crontab」しか見えない
+crontab -l
+# → 自分のジョブしか表示されない
+
+# 以下は crontab -l では見えない：
+# 1. 他のユーザーの crontab
+# 2. /etc/cron.d/ 配下のファイル
+# 3. /etc/cron.daily/ 等のディレクトリ
+# 4. /etc/crontab（システム crontab）
+# 5. anacron のジョブ
+# 6. systemd timer
+# 7. at コマンドで登録されたジョブ
+```
 
 #### 確認コマンド
 
 ```bash
 # ========================================
-# ユーザー crontab
+# 1. ユーザー crontab（自分以外も）
 # ========================================
 
 # 自分の crontab
 crontab -l
 
-# 特定ユーザーの crontab
+# 特定ユーザーの crontab（root権限必要）
 sudo crontab -l -u log-torukun
 sudo crontab -l -u www-data
 sudo crontab -l -u root
 
+# ★★★ 全ユーザーの crontab を一括確認 ★★★
+for user in $(cut -d: -f1 /etc/passwd); do
+  echo "=== $user ==="
+  sudo crontab -l -u "$user" 2>/dev/null
+done
+
 # crontab ファイルの場所（直接確認）
 # Ubuntu/Debian
 sudo ls -la /var/spool/cron/crontabs/
+sudo cat /var/spool/cron/crontabs/*
 
 # RHEL/CentOS
 sudo ls -la /var/spool/cron/
+sudo cat /var/spool/cron/*
 
 # ========================================
-# システム cron
+# 2. システム cron（/etc/cron*）
 # ========================================
 
-# /etc/cron.d/ 配下
+# /etc/crontab（システム全体の crontab）
+cat /etc/crontab
+
+# /etc/cron.d/ 配下（パッケージがインストールするジョブ）
 ls -la /etc/cron.d/
 cat /etc/cron.d/*
 
-# 定期実行ディレクトリ
+# 定期実行ディレクトリ（スクリプトを置くだけで動く）
 ls -la /etc/cron.hourly/
 ls -la /etc/cron.daily/
 ls -la /etc/cron.weekly/
 ls -la /etc/cron.monthly/
 
-# /etc/crontab
-cat /etc/crontab
+# 中身も確認
+cat /etc/cron.daily/*
+cat /etc/cron.hourly/*
 
 # ========================================
-# 特定スクリプトを実行している cron を探す
+# 3. anacron（電源オフ時も補完実行）
 # ========================================
 
+# anacron の設定
+cat /etc/anacrontab
+
+# anacron のタイムスタンプ（最終実行日時）
+ls -la /var/spool/anacron/
+
+# ========================================
+# 4. at コマンド（一回限りのジョブ）
+# ========================================
+
+# 登録されている at ジョブ一覧
+atq
+sudo atq
+
+# 特定ジョブの内容を確認
+at -c <job-number>
+
+# at ジョブの保存場所
+sudo ls -la /var/spool/at/
+sudo ls -la /var/spool/cron/atjobs/  # 一部ディストリ
+
+# ========================================
+# 5. systemd timer（cron の代替）
+# ========================================
+
+# 全タイマー一覧（次回実行時刻付き）
+systemctl list-timers --all
+
+# 特定タイマーの詳細
+systemctl status <timer-name>.timer
+systemctl cat <timer-name>.timer
+
+# タイマーに紐づくサービスの確認
+systemctl cat <timer-name>.service
+
+# タイマーのログ
+journalctl -u <timer-name>.timer
+journalctl -u <timer-name>.service
+
+# ========================================
+# 6. 特定スクリプトを実行している cron を探す
+# ========================================
+
+# 全箇所を一括検索
 grep -r "check_log" /etc/cron* 2>/dev/null
 sudo grep -r "check_log" /var/spool/cron/* 2>/dev/null
+systemctl list-timers --all | grep -i "check"
 
-# ========================================
-# systemd timer（最近の代替手段）
-# ========================================
-
-systemctl list-timers --all
-systemctl status <timer-name>.timer
+# 特定スクリプトがどこで呼ばれているか完全調査
+script_name="check_log"
+echo "=== /etc/crontab ===" && grep "$script_name" /etc/crontab
+echo "=== /etc/cron.d/ ===" && grep -r "$script_name" /etc/cron.d/
+echo "=== /etc/cron.*/ ===" && grep -r "$script_name" /etc/cron.hourly/ /etc/cron.daily/ /etc/cron.weekly/ /etc/cron.monthly/ 2>/dev/null
+echo "=== user crontabs ===" && sudo grep -r "$script_name" /var/spool/cron/ 2>/dev/null
+echo "=== systemd timers ===" && systemctl list-timers --all | grep -i "$script_name"
 ```
 
 #### よくあるハマり
 
 | 症状 | 原因 | 確認方法 |
 |------|------|----------|
+| `crontab -l` で見えないのに動いている | /etc/cron.d/ や他ユーザーの crontab | 上記の全箇所検索を実行 |
 | cron が実行されない | cron デーモン停止 | `systemctl status cron` |
 | 手動では動くが cron では動かない | PATH が違う | cron 内で `PATH=` を明示 |
 | 出力がどこにもない | リダイレクトされてない | cron 行の末尾を確認 |
 | 「file not found」 | 相対パス問題 | 絶対パスに変更 |
 | 権限エラー | 実行ユーザーの権限不足 | `sudo -u <user>` で再現 |
+| 毎日実行のはずが動かない日がある | anacron がサーバー起動時に実行 | `/var/spool/anacron/` を確認 |
+| 一度だけ動いて止まった | at コマンドで登録されていた | `atq` で確認 |
 
 #### cron 環境の罠
 
@@ -380,7 +574,7 @@ PATH=/usr/local/bin:/usr/bin:/bin
 
 ---
 
-### 3. 設定ファイル / INI / 環境変数
+### 4. 設定ファイル / INI / 環境変数
 
 #### 目的
 スクリプトが読み込む設定ファイルの場所・内容・権限を把握する
@@ -453,7 +647,7 @@ ls -la /etc/profile.d/
 
 ---
 
-### 4. ログ / 出力先
+### 5. ログ / 出力先
 
 #### 目的
 スクリプトの実行結果・エラーがどこに出力されているかを把握する
@@ -539,7 +733,7 @@ lsof /var/log/myapp.log
 
 ---
 
-### 5. パーミッション / 所有者
+### 6. パーミッション / 所有者
 
 #### 目的
 実行ユーザーがファイル・ディレクトリにアクセスできるかを確認する
@@ -613,7 +807,7 @@ stat -c "%a %n" ~/.ssh ~/.ssh/*
 
 ---
 
-### 6. ネットワーク / 疎通
+### 7. ネットワーク / 疎通
 
 #### 目的
 SSH先やAPIエンドポイントへの接続が可能かを確認する
