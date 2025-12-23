@@ -2,8 +2,13 @@
 title: "AWSなしでここまでできる：Raspberry Pi × MQTT × Webhookで現場通知を最速に作る方法"
 date: 2025-12-20
 draft: false
+categories: ["IoT・自動化"]
 tags: ["Raspberry Pi", "MQTT", "Webhook", "IoT", "Slack", "自動化", "受託開発"]
 description: "Mac/スマホからpub → Piでsub → Slack通知 → systemd常駐。クラウド不要で始める現場通知システムの最小構成を、コピペで動くコードと共に解説します。"
+cover:
+  image: "images/covers/raspberry-pi.jpg"
+  alt: "Raspberry Pi × MQTT × Webhook で現場通知システム"
+  relative: false
 ---
 
 ## 導入：現場で起きがちな課題
