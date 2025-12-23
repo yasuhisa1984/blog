@@ -13,16 +13,32 @@
   });
 
   document.addEventListener('DOMContentLoaded', function() {
-    // ```mermaid ブロックを <div class="mermaid"> に変換
-    document.querySelectorAll('pre code.language-mermaid').forEach(function(codeBlock) {
-      var pre = codeBlock.parentNode;
-      var div = document.createElement('div');
-      div.className = 'mermaid';
-      div.textContent = codeBlock.textContent;
-      pre.parentNode.replaceChild(div, pre);
+    // Hugoの<div class="highlight">内のmermaidコードを検出して変換
+    document.querySelectorAll('div.highlight').forEach(function(highlight) {
+      var code = highlight.querySelector('code');
+      if (code) {
+        var text = code.textContent.trim();
+        // Mermaid図の開始パターンを検出
+        if (text.startsWith('graph ') ||
+            text.startsWith('sequenceDiagram') ||
+            text.startsWith('flowchart') ||
+            text.startsWith('classDiagram') ||
+            text.startsWith('stateDiagram') ||
+            text.startsWith('erDiagram') ||
+            text.startsWith('gantt') ||
+            text.startsWith('pie') ||
+            text.startsWith('gitGraph') ||
+            text.startsWith('journey')) {
+          // <div class="mermaid">に変換
+          var div = document.createElement('div');
+          div.className = 'mermaid';
+          div.textContent = text;
+          highlight.parentNode.replaceChild(div, highlight);
+        }
+      }
     });
 
-    // レンダリング実行
+    // Mermaidレンダリング実行
     mermaid.run();
   });
 </script>
