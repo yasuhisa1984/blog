@@ -1,8 +1,19 @@
 <!-- Mermaid JS for diagram rendering -->
-<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
 <script>
+  // Mermaid初期化（DOMContentLoaded前に設定）
+  mermaid.initialize({
+    startOnLoad: false,  // 手動制御に変更
+    theme: document.documentElement.classList.contains('dark') ? 'dark' : 'neutral',
+    securityLevel: 'loose',
+    flowchart: {
+      useMaxWidth: true,
+      htmlLabels: true
+    }
+  });
+
   document.addEventListener('DOMContentLoaded', function() {
-    // Convert code blocks with language-mermaid to mermaid divs
+    // ```mermaid ブロックを <div class="mermaid"> に変換
     document.querySelectorAll('pre code.language-mermaid').forEach(function(codeBlock) {
       var pre = codeBlock.parentNode;
       var div = document.createElement('div');
@@ -11,16 +22,8 @@
       pre.parentNode.replaceChild(div, pre);
     });
 
-    // Initialize mermaid
-    mermaid.initialize({
-      startOnLoad: true,
-      theme: 'neutral',
-      securityLevel: 'loose',
-      flowchart: {
-        useMaxWidth: true,
-        htmlLabels: true
-      }
-    });
+    // レンダリング実行
+    mermaid.run();
   });
 </script>
 <style>

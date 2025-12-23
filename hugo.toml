@@ -87,3 +87,6 @@ theme = 'PaperMod'
     guessSyntax = true
     lineNos = true
     style = "monokai"
+  [markup.goldmark]
+    [markup.goldmark.renderer]
+      unsafe = true  # Mermaid図のHTML出力を許可
