@@ -15,7 +15,8 @@
   document.addEventListener('DOMContentLoaded', function() {
     // Hugoの<div class="highlight">内のmermaidコードを検出して変換
     document.querySelectorAll('div.highlight').forEach(function(highlight) {
-      var code = highlight.querySelector('code');
+      // table構造の場合は2番目のtd内のcodeを取得
+      var code = highlight.querySelector('td:last-child code') || highlight.querySelector('code');
       if (code) {
         var text = code.textContent.trim();
         // Mermaid図の開始パターンを検出
