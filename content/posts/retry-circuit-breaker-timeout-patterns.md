@@ -657,24 +657,20 @@ def process_payment_with_check(order_id, amount, redis_client):
 
 ## 3つの状態
 
-```
-         失敗が閾値を超える
-    ┌──────────────────────────┐
-    │                          ↓
-┌───────┐              ┌───────────┐
-│ Closed │              │   Open    │
-│ (正常)  │              │  (遮断)   │
-└───────┘              └───────────┘
-    ↑                          │
-    │       一定時間経過        │
-    │          ↓               │
-    │   ┌─────────────┐       │
-    └───│ Half-Open   │←──────┘
-        │ (試験的に許可) │
-        └─────────────┘
-              │
-              │ 成功したらClosed
-              │ 失敗したらOpen
+```mermaid
+graph TB
+    Closed["Closed<br/>正常"]
+    Open["Open<br/>遮断"]
+    HalfOpen["Half-Open<br/>試験的に許可"]
+
+    Closed -->|"失敗が閾値を超える"| Open
+    Open -->|"一定時間経過"| HalfOpen
+    HalfOpen -->|"成功"| Closed
+    HalfOpen -->|"失敗"| Open
+
+    style Closed fill:#4caf50,color:#fff,stroke:#2e7d32
+    style Open fill:#f44336,color:#fff,stroke:#c62828
+    style HalfOpen fill:#ff9800,color:#fff,stroke:#e65100
 ```
 
 | 状態 | 動作 |
@@ -1029,44 +1025,35 @@ user = client.call(
 
 ## 処理フロー
 
-```
-リクエスト
-    │
-    ▼
-┌─────────────────────────────┐
-│ サーキットブレーカーチェック   │
-│ (Open なら即座にフォールバック) │
-└──────────────┬──────────────┘
-               │ Closed/Half-Open
-               ▼
-┌─────────────────────────────┐
-│ タイムアウト付きでリクエスト   │
-│ (5秒で打ち切り)               │
-└──────────────┬──────────────┘
-               │
-       ┌───────┴───────┐
-       │               │
-    成功              失敗
-       │               │
-       ▼               ▼
-    返却        ┌─────────────────┐
-               │ リトライ可能？    │
-               └────┬────────────┘
-                    │
-            ┌───────┴───────┐
-            │               │
-           Yes              No
-            │               │
-            ▼               ▼
-    ┌───────────────┐   フォールバック
-    │ 指数バックオフ │   or エラー
-    │ + ジッター     │
-    │ で待機        │
-    └───────┬───────┘
-            │
-            ▼
-       リトライ実行
-       (最大3回まで)
+```mermaid
+flowchart TD
+    Start["リクエスト"]
+    CB["サーキットブレーカーチェック<br/>Open なら即座にフォールバック"]
+    Timeout["タイムアウト付きでリクエスト<br/>5秒で打ち切り"]
+    Success["返却"]
+    CheckRetry["リトライ可能？"]
+    Backoff["指数バックオフ<br/>+ ジッター<br/>で待機"]
+    Retry["リトライ実行<br/>最大3回まで"]
+    Fallback["フォールバック<br/>or エラー"]
+
+    Start --> CB
+    CB -->|"Closed/Half-Open"| Timeout
+    CB -->|"Open"| Fallback
+    Timeout -->|"成功"| Success
+    Timeout -->|"失敗"| CheckRetry
+    CheckRetry -->|"Yes"| Backoff
+    CheckRetry -->|"No"| Fallback
+    Backoff --> Retry
+    Retry --> Timeout
+
+    style Start fill:#e1f5fe
+    style CB fill:#fff3e0
+    style Timeout fill:#e8f5e9
+    style Success fill:#4caf50,color:#fff
+    style CheckRetry fill:#fff3e0
+    style Backoff fill:#e1f5ff
+    style Retry fill:#ffccbc
+    style Fallback fill:#ffebee
 ```
 
 ---

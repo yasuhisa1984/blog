@@ -146,12 +146,24 @@ Layer 1: 物理層
 
 ### 実務での選択
 
-```
-「URLやヘッダーで振り分けが必要？」
-   ├─ Yes → L7（ALB, Nginx）
-   └─ No → 「高スループットが必要？」
-              ├─ Yes → L4（NLB, HAProxy）
-              └─ No → L7（機能が多いので便利）
+```mermaid
+flowchart TD
+    Q1["URLやヘッダーで振り分けが必要？"]
+    Q2["高スループットが必要？"]
+    A1["L7<br/>ALB, Nginx"]
+    A2["L4<br/>NLB, HAProxy"]
+    A3["L7<br/>機能が多いので便利"]
+
+    Q1 -->|"Yes"| A1
+    Q1 -->|"No"| Q2
+    Q2 -->|"Yes"| A2
+    Q2 -->|"No"| A3
+
+    style Q1 fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    style Q2 fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    style A1 fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    style A2 fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
+    style A3 fill:#f3e5f5,stroke:#9c27b0,stroke-width:2px
 ```
 
 ---

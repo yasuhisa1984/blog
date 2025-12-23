@@ -204,12 +204,24 @@ Replica:          Receive Log ──► ACK ──► Apply (後から)
 
 ### 実務での選択
 
-```
-「絶対にデータを失いたくない？」
-   ├─ Yes → 「レイテンシは許容できる？」
-   │         ├─ Yes → 同期レプリケーション
-   │         └─ No → 半同期レプリケーション
-   └─ No → 非同期レプリケーション（一般的）
+```mermaid
+flowchart TD
+    Q1["絶対にデータを失いたくない？"]
+    Q2["レイテンシは許容できる？"]
+    A1["同期レプリケーション"]
+    A2["半同期レプリケーション"]
+    A3["非同期レプリケーション<br/>一般的"]
+
+    Q1 -->|"Yes"| Q2
+    Q1 -->|"No"| A3
+    Q2 -->|"Yes"| A1
+    Q2 -->|"No"| A2
+
+    style Q1 fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    style Q2 fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    style A1 fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    style A2 fill:#f3e5f5,stroke:#9c27b0,stroke-width:2px
+    style A3 fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
 ```
 
 ---

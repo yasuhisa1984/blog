@@ -65,12 +65,24 @@ cover:
 
 ### 使い分け
 
-```
-「1台のDBで性能が足りる？」
-   ├─ Yes → パーティショニング or そのまま
-   └─ No → 「レプリケーションで解決？」
-              ├─ Yes（読み取りボトルネック） → レプリケーション
-              └─ No（書き込みボトルネック） → シャーディング
+```mermaid
+flowchart TD
+    Q1["1台のDBで性能が足りる？"]
+    Q2["レプリケーションで解決？"]
+    A1["パーティショニング<br/>or そのまま"]
+    A2["レプリケーション<br/>読み取りボトルネック"]
+    A3["シャーディング<br/>書き込みボトルネック"]
+
+    Q1 -->|"Yes"| A1
+    Q1 -->|"No"| Q2
+    Q2 -->|"Yes"| A2
+    Q2 -->|"No"| A3
+
+    style Q1 fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    style Q2 fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    style A1 fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
+    style A2 fill:#e1f5ff,stroke:#2196f3,stroke-width:2px
+    style A3 fill:#f3e5f5,stroke:#9c27b0,stroke-width:2px
 ```
 
 ---

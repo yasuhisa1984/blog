@@ -324,14 +324,30 @@ ECS Fargate (リクエスト時のみ起動):
 
 ### 使い分けの指針
 
-```
-「実行時間は15分以内？」
-   ├─ No → ECS Fargate
-   └─ Yes → 「常時起動が必要？」
-               ├─ Yes → ECS Fargate
-               └─ No → 「トラフィックは予測可能？」
-                          ├─ Yes（常時高負荷） → ECS Fargate
-                          └─ No（スパイク or 低頻度） → Lambda
+```mermaid
+flowchart TD
+    Q1["実行時間は15分以内？"]
+    Q2["常時起動が必要？"]
+    Q3["トラフィックは予測可能？"]
+    A1["ECS Fargate"]
+    A2["ECS Fargate"]
+    A3["ECS Fargate<br/>常時高負荷"]
+    A4["Lambda<br/>スパイク or 低頻度"]
+
+    Q1 -->|"No"| A1
+    Q1 -->|"Yes"| Q2
+    Q2 -->|"Yes"| A2
+    Q2 -->|"No"| Q3
+    Q3 -->|"Yes"| A3
+    Q3 -->|"No"| A4
+
+    style Q1 fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    style Q2 fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    style Q3 fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    style A1 fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    style A2 fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    style A3 fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    style A4 fill:#4caf50,stroke:#2e7d32,stroke-width:2px,color:#fff
 ```
 
 ---

@@ -43,14 +43,21 @@ CAP定理は単なる「2択」ではない。
 > 分散システムにおいて、C・A・Pの3つを同時に満たすことはできない。
 > 最大で2つまでしか保証できない。
 
-```
-        Consistency
-           /\
-          /  \
-         /    \
-        / CAP  \
-       /________\
-   Availability  Partition Tolerance
+```mermaid
+graph TD
+    CAP["CAP定理の3要素"]
+    C["Consistency<br/>一貫性"]
+    A["Availability<br/>可用性"]
+    P["Partition Tolerance<br/>分断耐性"]
+
+    CAP --> C
+    CAP --> A
+    CAP --> P
+
+    style CAP fill:#f0f0f0,stroke:#333,stroke-width:2px
+    style C fill:#e3f2fd
+    style A fill:#e8f5e9
+    style P fill:#fff3e0
 ```
 
 ### よくある誤解
@@ -66,18 +73,24 @@ CAP定理は単なる「2択」ではない。
 
 ### シナリオ: ネットワーク分断が起きた
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                    ネットワーク分断                       │
-│                                                         │
-│   ┌──────────┐          ╳          ┌──────────┐        │
-│   │  Node A  │    分断    │        │  Node B  │        │
-│   │  Data: 1 │   ─────╳─────      │  Data: 1 │        │
-│   └──────────┘          ╳          └──────────┘        │
-│        ↑                                  ↑            │
-│    Client 1                           Client 2         │
-│                                                         │
-└─────────────────────────────────────────────────────────┘
+```mermaid
+graph TB
+    subgraph Partition["ネットワーク分断"]
+        NodeA["Node A<br/>Data: 1"]
+        NodeB["Node B<br/>Data: 1"]
+        Client1["Client 1"]
+        Client2["Client 2"]
+
+        Client1 -.->|接続| NodeA
+        Client2 -.->|接続| NodeB
+        NodeA -.->|✗ 分断| NodeB
+    end
+
+    style Partition fill:#ffebee,stroke:#d32f2f
+    style NodeA fill:#e3f2fd
+    style NodeB fill:#e3f2fd
+    style Client1 fill:#fff3e0
+    style Client2 fill:#fff3e0
 ```
 
 ### Client 1 が Node A に書き込み
@@ -231,12 +244,24 @@ Read:  data = 2 ✓
 
 ### 実務での選択
 
-```
-「絶対に最新データが必要？」
-   ├─ Yes → 強い一貫性（性能トレードオフ）
-   └─ No → 「どのくらいの遅延は許容？」
-              ├─ 数秒OK → 結果整合性
-              └─ 自分の書き込みは見たい → Read Your Writes
+```mermaid
+flowchart TD
+    Q1["絶対に最新データが必要？"]
+    Q2["どのくらいの遅延は許容？"]
+    A1["強い一貫性<br/>性能トレードオフ"]
+    A2["結果整合性"]
+    A3["Read Your Writes"]
+
+    Q1 -->|"Yes"| A1
+    Q1 -->|"No"| Q2
+    Q2 -->|"数秒OK"| A2
+    Q2 -->|"自分の書き込みは見たい"| A3
+
+    style Q1 fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    style Q2 fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    style A1 fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    style A2 fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
+    style A3 fill:#f3e5f5,stroke:#9c27b0,stroke-width:2px
 ```
 
 ---
@@ -361,14 +386,24 @@ Write → ローカルに書いて即応答 → 速い（低レイテンシ）
 
 ### 実務での意味
 
-```
-「常に高速レスポンスが必要？」
-   ├─ Yes → EL（結果整合性、低レイテンシ）
-   │         → Cassandra, DynamoDB
-   └─ No → 「一貫性が重要？」
-              ├─ Yes → EC（強い一貫性）
-              │         → MongoDB, PostgreSQL
-              └─ No → 要件に応じて選択
+```mermaid
+flowchart TD
+    Q1["常に高速レスポンスが必要？"]
+    Q2["一貫性が重要？"]
+    A1["EL<br/>結果整合性、低レイテンシ<br/>Cassandra, DynamoDB"]
+    A2["EC<br/>強い一貫性<br/>MongoDB, PostgreSQL"]
+    A3["要件に応じて選択"]
+
+    Q1 -->|"Yes"| A1
+    Q1 -->|"No"| Q2
+    Q2 -->|"Yes"| A2
+    Q2 -->|"No"| A3
+
+    style Q1 fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    style Q2 fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    style A1 fill:#e1f5ff,stroke:#2196f3,stroke-width:2px
+    style A2 fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
+    style A3 fill:#fff9c4,stroke:#f57f17,stroke-width:2px
 ```
 
 ---
@@ -427,22 +462,25 @@ Write → ローカルに書いて即応答 → 速い（低レイテンシ）
 
 ### ハイブリッドアプローチ
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                     Application                         │
-│                                                         │
-│  ┌─────────────────┐        ┌─────────────────┐        │
-│  │  読み取りパス   │        │  書き込みパス   │        │
-│  │    (高速)      │        │   (一貫性)     │        │
-│  └────────┬────────┘        └────────┬────────┘        │
-│           │                          │                 │
-│  ┌────────▼────────┐        ┌────────▼────────┐        │
-│  │     Redis       │        │   PostgreSQL   │        │
-│  │  (キャッシュ)   │ ←同期─ │  (マスター)    │        │
-│  │      AP         │        │      CP        │        │
-│  └─────────────────┘        └─────────────────┘        │
-│                                                         │
-└─────────────────────────────────────────────────────────┘
+```mermaid
+graph TB
+    subgraph App["Application"]
+        ReadPath["読み取りパス<br/>（高速）"]
+        WritePath["書き込みパス<br/>（一貫性）"]
+
+        Redis["Redis<br/>（キャッシュ）<br/>AP"]
+        PostgreSQL["PostgreSQL<br/>（マスター）<br/>CP"]
+
+        ReadPath --> Redis
+        WritePath --> PostgreSQL
+        PostgreSQL -.->|同期| Redis
+    end
+
+    style App fill:#f5f5f5,stroke:#333
+    style ReadPath fill:#e8f5e9
+    style WritePath fill:#e3f2fd
+    style Redis fill:#fff3e0
+    style PostgreSQL fill:#e1f5ff
 ```
 
 ```python
@@ -476,52 +514,87 @@ class HybridDataStore:
 
 ### 1. フェイルオーバー（CP）
 
-```
-分断発生:
-┌──────────┐     ╳     ┌──────────┐
-│ Primary  │ ───╳───  │ Replica  │
-│  (Active)│     ╳     │ (Standby)│
-└──────────┘     ╳     └──────────┘
-                 ↓
-分断検知後:
-┌──────────┐           ┌──────────┐
-│ Primary  │           │ Replica  │
-│ (停止)   │           │→ Primary │
-└──────────┘           └──────────┘
-                       ↑
-                 クライアントは
-                 新Primaryに接続
+```mermaid
+graph TB
+    subgraph Before["分断発生"]
+        Primary1["Primary<br/>（Active）"]
+        Replica1["Replica<br/>（Standby）"]
+        Primary1 -.->|✗ 分断| Replica1
+    end
+
+    subgraph After["分断検知後"]
+        Primary2["Primary<br/>（停止）"]
+        Replica2["Replica<br/>→ Primary"]
+        Client["クライアントは<br/>新Primaryに接続"]
+        Client --> Replica2
+    end
+
+    Before --> After
+
+    style Before fill:#ffebee
+    style After fill:#e8f5e9
+    style Primary1 fill:#e3f2fd
+    style Replica1 fill:#fff3e0
+    style Primary2 fill:#ccc
+    style Replica2 fill:#4caf50,color:#fff
 ```
 
 ### 2. 読み取り専用モード
 
-```
-分断発生時:
-┌──────────┐     ╳     ┌──────────┐
-│  Node A  │ ───╳───  │  Node B  │
-│ (R/W)    │     ╳     │ (R/W)    │
-└──────────┘     ╳     └──────────┘
-                 ↓
-対応:
-┌──────────┐           ┌──────────┐
-│  Node A  │           │  Node B  │
-│ (R only) │           │ (R only) │
-└──────────┘           └──────────┘
-          ↑
-     書き込みは拒否
-     読み取りは許可（古いデータかも）
+```mermaid
+graph TB
+    subgraph Before["分断発生時"]
+        NodeA1["Node A<br/>（R/W）"]
+        NodeB1["Node B<br/>（R/W）"]
+        NodeA1 -.->|✗ 分断| NodeB1
+    end
+
+    subgraph After["対応"]
+        NodeA2["Node A<br/>（R only）"]
+        NodeB2["Node B<br/>（R only）"]
+        Note["書き込みは拒否<br/>読み取りは許可<br/>（古いデータかも）"]
+        Note -.-> NodeA2
+        Note -.-> NodeB2
+    end
+
+    Before --> After
+
+    style Before fill:#ffebee
+    style After fill:#fff3e0
+    style NodeA1 fill:#e3f2fd
+    style NodeB1 fill:#e3f2fd
+    style NodeA2 fill:#ffcc80
+    style NodeB2 fill:#ffcc80
+    style Note fill:#f5f5f5
 ```
 
 ### 3. Quorum（過半数）
 
-```
-5ノードクラスタ:
-┌────┐ ┌────┐ ┌────┐     ╳     ┌────┐ ┌────┐
-│ N1 │ │ N2 │ │ N3 │ ───╳───  │ N4 │ │ N5 │
-└────┘ └────┘ └────┘     ╳     └────┘ └────┘
-         ↑                         ↑
-    3ノード（過半数）         2ノード（少数派）
-    → 処理を継続              → 停止
+```mermaid
+graph TB
+    subgraph Cluster["5ノードクラスタ"]
+        subgraph Majority["3ノード（過半数）<br/>→ 処理を継続"]
+            N1["N1"]
+            N2["N2"]
+            N3["N3"]
+        end
+
+        subgraph Minority["2ノード（少数派）<br/>→ 停止"]
+            N4["N4"]
+            N5["N5"]
+        end
+
+        Majority -.->|✗ 分断| Minority
+    end
+
+    style Cluster fill:#f5f5f5
+    style Majority fill:#e8f5e9,stroke:#4caf50
+    style Minority fill:#ffebee,stroke:#f44336
+    style N1 fill:#4caf50,color:#fff
+    style N2 fill:#4caf50,color:#fff
+    style N3 fill:#4caf50,color:#fff
+    style N4 fill:#f44336,color:#fff
+    style N5 fill:#f44336,color:#fff
 ```
 
 ```python
@@ -537,19 +610,35 @@ can_process(2, 5)  # False: 過半数がないので停止
 
 ### 4. 結果整合性 + コンフリクト解決
 
-```
-分断中の書き込み:
-┌──────────────┐           ┌──────────────┐
-│    Node A    │           │    Node B    │
-│ Write: x = 1 │           │ Write: x = 2 │
-└──────────────┘           └──────────────┘
+```mermaid
+graph TB
+    subgraph During["分断中の書き込み"]
+        NodeA["Node A<br/>Write: x = 1"]
+        NodeB["Node B<br/>Write: x = 2"]
+        NodeA -.-x|分断| NodeB
+    end
 
-分断解消後:
-→ コンフリクト検出
-→ 解決戦略を適用
-   - Last Write Wins (LWW): タイムスタンプが新しい方
-   - Vector Clocks: 因果関係で判断
-   - Application-level: アプリケーションが決定
+    subgraph After["分断解消後"]
+        Conflict["⚠️ コンフリクト検出"]
+        LWW["Last Write Wins<br/>タイムスタンプが新しい方"]
+        VC["Vector Clocks<br/>因果関係で判断"]
+        App["Application-level<br/>アプリケーションが決定"]
+
+        Conflict --> LWW
+        Conflict --> VC
+        Conflict --> App
+    end
+
+    During --> After
+
+    style During fill:#ffebee
+    style After fill:#fff3e0
+    style NodeA fill:#e3f2fd
+    style NodeB fill:#e3f2fd
+    style Conflict fill:#ff9800,color:#fff
+    style LWW fill:#e8f5e9
+    style VC fill:#e1f5ff
+    style App fill:#f3e5f5
 ```
 
 ---
