@@ -103,11 +103,8 @@ sequenceDiagram
 
     C1->>NA: WRITE data = 2
     NA->>NA: Data = 2
-    NA-xNB: ✗ 分断により同期できない
+    NA--xNB: ✗ 分断により同期できない
     Note over NB: Data = 1 (古いまま)
-
-    style NA fill:#e3f2fd
-    style NB fill:#ffebee
 ```
 
 ### Client 2 が Node B から読み取りしようとする
@@ -123,12 +120,9 @@ sequenceDiagram
     participant NA as Node A
 
     C2->>NB: READ data
-    NB-xNA: ✗ 同期できない
+    NB--xNA: ✗ 同期できない
     NB-->>C2: ERROR (利用不可)
     Note over C2,NB: 一貫性は保たれる<br/>不正確なデータは返さない<br/>可用性を失う
-
-    style NB fill:#e3f2fd,stroke:#1976d2
-    style C2 fill:#ffebee
 ```
 
 **結果**: 一貫性は保たれる（不正確なデータを返さない）が、可用性を失う
@@ -142,12 +136,9 @@ sequenceDiagram
     participant NA as Node A
 
     C2->>NB: READ data
-    NB-xNA: ✗ 同期できない
+    NB--xNA: ✗ 同期できない
     NB-->>C2: data = 1 (古いデータ)
     Note over C2,NB: 可用性は保たれる<br/>応答は返す<br/>一貫性を失う
-
-    style NB fill:#e8f5e9,stroke:#4caf50
-    style C2 fill:#fff9c4
 ```
 
 **結果**: 可用性は保たれる（応答は返す）が、一貫性を失う
@@ -313,10 +304,6 @@ sequenceDiagram
     C->>N2: Read
     N2-->>C: data = 2 ✓
     Note over C,N2: 全ての読み取りが<br/>最新の書き込みを返す
-
-    style N1 fill:#e3f2fd,stroke:#1976d2
-    style N2 fill:#e3f2fd,stroke:#1976d2
-    style C fill:#c8e6c9,stroke:#4caf50
 ```
 
 **実現方法**: 同期レプリケーション、2フェーズコミット
@@ -332,7 +319,7 @@ sequenceDiagram
     C->>N1: Write: data = 2
     N1-->>C: 即座に完了
     Note over N1,N2: 非同期でレプリケーション
-    N1--)N2: バックグラウンド同期
+    N1-->>N2: バックグラウンド同期
 
     C->>N2: Read (すぐ)
     N2-->>C: data = 1 (古いかも)
@@ -343,10 +330,6 @@ sequenceDiagram
     C->>N2: Read (後で)
     N2-->>C: data = 2 ✓
     Note over C,N2: 時間が経てば<br/>全ノードが同じデータになる
-
-    style N1 fill:#e8f5e9,stroke:#4caf50
-    style N2 fill:#e8f5e9,stroke:#4caf50
-    style C fill:#fff9c4,stroke:#f57f17
 ```
 
 **実現方法**: 非同期レプリケーション、バックグラウンド同期
@@ -656,7 +639,7 @@ graph TB
     subgraph Before["分断発生"]
         Primary1["Primary<br/>（Active）"]
         Replica1["Replica<br/>（Standby）"]
-        Primary1 -.->|✗ 分断| Replica1
+        Primary1 -.-> Replica1
     end
 
     subgraph After["分断検知後"]
@@ -683,7 +666,7 @@ graph TB
     subgraph Before["分断発生時"]
         NodeA1["Node A<br/>（R/W）"]
         NodeB1["Node B<br/>（R/W）"]
-        NodeA1 -.->|✗ 分断| NodeB1
+        NodeA1 -.-> NodeB1
     end
 
     subgraph After["対応"]
@@ -721,7 +704,7 @@ graph TB
             N5["N5"]
         end
 
-        Majority -.->|✗ 分断| Minority
+        Majority -.-> Minority
     end
 
     style Cluster fill:#f5f5f5
@@ -752,7 +735,7 @@ graph TB
     subgraph During["分断中の書き込み"]
         NodeA["Node A<br/>Write: x = 1"]
         NodeB["Node B<br/>Write: x = 2"]
-        NodeA -.-x|分断| NodeB
+        NodeA -.-> NodeB
     end
 
     subgraph After["分断解消後"]
