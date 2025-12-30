@@ -112,6 +112,34 @@ graph LR
 
 **用途**：ローカルPCから、閉域ネットワーク内のDB・管理画面に接続
 
+```mermaid
+graph LR
+    subgraph Local["ローカルPC"]
+        App["アプリ<br/>(mysql client)"]
+        LocalPort["localhost:13306"]
+    end
+
+    subgraph Internet["インターネット"]
+        Tunnel["SSH Tunnel<br/>暗号化"]
+    end
+
+    subgraph Cloud["閉域ネットワーク"]
+        Bastion["踏み台サーバー<br/>bastion.example.com"]
+        DB["内部DB<br/>internal-db.local:3306"]
+    end
+
+    App -->|"接続"| LocalPort
+    LocalPort -->|"ssh -L 13306:internal-db.local:3306"| Tunnel
+    Tunnel --> Bastion
+    Bastion -->|"転送"| DB
+
+    style Local fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    style Cloud fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    style Tunnel fill:#c8e6c9,stroke:#2e7d32,stroke-width:2px
+    style LocalPort fill:#bbdefb,stroke:#1976d2
+    style DB fill:#ffecb3,stroke:#f57c00
+```
+
 ```bash
 # 基本形
 ssh -L [ローカルポート]:[接続先ホスト]:[接続先ポート] [踏み台ユーザー]@[踏み台ホスト]
@@ -158,6 +186,36 @@ lsof -i :13306
 
 **用途**：NAT内のサービスを、外部から一時的にアクセス可能にする
 
+```mermaid
+graph RL
+    subgraph NAT["NAT内 (ローカルPC)"]
+        App["開発サーバー<br/>localhost:3000"]
+    end
+
+    subgraph Internet["インターネット"]
+        Tunnel["SSH Tunnel<br/>暗号化"]
+    end
+
+    subgraph External["外部サーバー"]
+        ExtServer["external-server.com"]
+        RemotePort["localhost:8080"]
+        Client["外部からのアクセス"]
+    end
+
+    App -->|"ssh -R 8080:localhost:3000"| Tunnel
+    Tunnel --> ExtServer
+    ExtServer --> RemotePort
+    Client -->|"アクセス"| RemotePort
+    RemotePort -.->|"転送"| Tunnel
+    Tunnel -.->|"NAT内に届く"| App
+
+    style NAT fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    style External fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    style Tunnel fill:#c8e6c9,stroke:#2e7d32,stroke-width:2px
+    style App fill:#bbdefb,stroke:#1976d2
+    style RemotePort fill:#ffecb3,stroke:#f57c00
+```
+
 ```bash
 # 基本形
 ssh -R [リモートポート]:[ローカルホスト]:[ローカルポート] [外部サーバー]
@@ -196,6 +254,41 @@ GatewayPorts no  # リモートフォワードを localhost に限定
 ### 神テク③ SSH動的ポートフォワード（SOCKS）
 
 **用途**：ブラウザやCLIをまとめて、トンネル経由で通す
+
+```mermaid
+graph TB
+    subgraph Local["ローカルPC"]
+        Browser["ブラウザ"]
+        Curl["curl"]
+        Git["git"]
+        SOCKS["SOCKSプロキシ<br/>localhost:1080"]
+    end
+
+    subgraph Internet["インターネット"]
+        Tunnel["SSH Tunnel<br/>暗号化"]
+    end
+
+    subgraph Cloud["閉域ネットワーク"]
+        Bastion["踏み台サーバー"]
+        Server1["internal-api.local"]
+        Server2["internal-db.local"]
+        Server3["internal-admin.local"]
+    end
+
+    Browser -->|"SOCKS5設定"| SOCKS
+    Curl -->|"--socks5"| SOCKS
+    Git -->|"proxy設定"| SOCKS
+    SOCKS -->|"ssh -D 1080"| Tunnel
+    Tunnel --> Bastion
+    Bastion --> Server1
+    Bastion --> Server2
+    Bastion --> Server3
+
+    style Local fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    style Cloud fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    style Tunnel fill:#c8e6c9,stroke:#2e7d32,stroke-width:2px
+    style SOCKS fill:#bbdefb,stroke:#1976d2,stroke-width:2px
+```
 
 ```bash
 # 基本形：SOCKSプロキシを立てる
@@ -265,8 +358,37 @@ proxychains4 nmap -sT internal-server.local
 
 **用途**：「直接は繋がらない」を突破する
 
-```
-PC → インターネット → Bastion → 内部NW → 最終目的地
+```mermaid
+graph LR
+    subgraph Local["ローカルPC"]
+        PC["SSH Client"]
+    end
+
+    subgraph Internet["インターネット"]
+        Tunnel1["SSH Tunnel 1<br/>暗号化"]
+    end
+
+    subgraph DMZ["DMZ"]
+        Bastion["踏み台サーバー<br/>bastion.example.com"]
+    end
+
+    subgraph Internal["内部ネットワーク"]
+        Tunnel2["SSH経由<br/>暗号化"]
+        Target["最終目的地<br/>internal-server.local"]
+    end
+
+    PC -->|"ssh -J bastion"| Tunnel1
+    Tunnel1 --> Bastion
+    Bastion -->|"ProxyJump"| Tunnel2
+    Tunnel2 --> Target
+
+    style Local fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    style DMZ fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    style Internal fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
+    style Tunnel1 fill:#c8e6c9,stroke:#2e7d32,stroke-width:2px
+    style Tunnel2 fill:#c8e6c9,stroke:#2e7d32,stroke-width:2px
+    style Bastion fill:#ffecb3,stroke:#f57c00
+    style Target fill:#c8e6c9,stroke:#2e7d32
 ```
 
 **ProxyJump（-J）を使う（推奨）**
@@ -330,6 +452,31 @@ ssh -L 13306:localhost:3306 internal-db
 ### 神テク⑤ トンネル × cron / バッチ
 
 **用途**：定期ジョブでトンネルを活用
+
+```mermaid
+sequenceDiagram
+    participant Cron as cronジョブ
+    participant Script as バックアップスクリプト
+    participant SSH as SSHトンネル
+    participant Bastion as 踏み台
+    participant DB as 内部DB
+
+    Cron->>Script: 定期実行 (例: 毎日2時)
+    Script->>SSH: トンネルを開く<br/>ssh -f -N -L 13306:internal-db:3306
+    SSH->>Bastion: 接続確立
+    Note over Script,SSH: TUNNEL_PID を保存
+    Script->>Script: sleep 2 (接続待ち)
+    Script->>DB: mysqldump<br/>via localhost:13306
+    DB-->>Script: バックアップデータ
+    Script->>Script: trap cleanup EXIT
+    Script->>SSH: kill TUNNEL_PID
+    SSH->>Bastion: 切断
+    Note over Script: 完了
+
+    rect rgb(232, 245, 233)
+        Note over Cron,DB: ✅ 安全: トンネルは使用後に自動クローズ
+    end
+```
 
 **ワンショット設計（推奨）**
 
@@ -409,6 +556,41 @@ autossh -M 0 -f -N \
 
 **用途**：SSH経由でリモートサーバーのログを取得
 
+```mermaid
+graph TB
+    subgraph Local["ローカルPC"]
+        Engineer["エンジニア"]
+    end
+
+    subgraph Internet["インターネット"]
+        Tunnel["SSH Tunnel<br/>暗号化"]
+    end
+
+    subgraph Cloud["クラウド環境"]
+        Bastion["踏み台サーバー"]
+        Worker["ワーカーサーバー"]
+        Logs["ログファイル<br/>/var/log/app.log"]
+        Docker["Docker Container<br/>app-container"]
+    end
+
+    Engineer -->|"ssh -J bastion worker"| Tunnel
+    Tunnel --> Bastion
+    Bastion --> Worker
+    Worker -->|"tail -n 200"| Logs
+    Worker -->|"docker logs"| Docker
+    Logs -.->|"ログ内容"| Engineer
+    Docker -.->|"ログ内容"| Engineer
+
+    style Local fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    style Cloud fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    style Tunnel fill:#c8e6c9,stroke:#2e7d32,stroke-width:2px
+    style Engineer fill:#bbdefb,stroke:#1976d2
+    style Bastion fill:#ffecb3,stroke:#f57c00
+    style Worker fill:#ffecb3,stroke:#f57c00
+    style Logs fill:#ffe0b2,stroke:#f57c00
+    style Docker fill:#ffe0b2,stroke:#f57c00
+```
+
 **基本パターン**
 
 ```bash
@@ -461,6 +643,44 @@ ssh -J bastion deploy@worker "docker-compose logs --tail 50"
 ---
 
 ### 神テク⑦ トンネル × クラウド（AWS/GCP）
+
+```mermaid
+graph TB
+    subgraph Local["ローカルPC"]
+        PC["ローカル端末"]
+    end
+
+    subgraph AWS["AWS"]
+        SSM["Session Manager<br/>(IAM認証)"]
+        EC2["EC2 (Private)<br/>外部IP不要"]
+        RDS["RDS<br/>(Private)"]
+    end
+
+    subgraph GCP["GCP"]
+        IAP["Identity-Aware Proxy<br/>(IAM認証)"]
+        GCE["GCE Instance<br/>(内部IPのみ)"]
+    end
+
+    PC -->|"aws ssm start-session<br/>--document-name<br/>AWS-StartPortForwardingSession"| SSM
+    SSM -->|"22番ポート不要"| EC2
+    EC2 --> RDS
+
+    PC -->|"gcloud compute ssh<br/>--tunnel-through-iap"| IAP
+    IAP -->|"外部IP不要"| GCE
+
+    style Local fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    style AWS fill:#fff3e0,stroke:#ff9900,stroke-width:2px
+    style GCP fill:#e8f5e9,stroke:#4285f4,stroke-width:2px
+    style SSM fill:#ff9900,stroke:#232f3e,stroke-width:2px
+    style IAP fill:#4285f4,stroke:#1a73e8,stroke-width:2px
+    style EC2 fill:#ffecb3,stroke:#ff9900
+    style GCE fill:#c8e6c9,stroke:#4285f4
+    style RDS fill:#ffe0b2,stroke:#ff9900
+
+    rect rgb(232, 245, 233)
+        Note over SSM,IAP: ✅ セキュリティグループで22番ポートを開放不要<br/>✅ IAM認証で制御<br/>✅ 監査ログ自動取得
+    end
+```
 
 **AWS EC2：Session Manager + ポートフォワード**
 
