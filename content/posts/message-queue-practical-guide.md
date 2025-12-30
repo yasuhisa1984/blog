@@ -60,14 +60,19 @@ cover:
 
 ### アーキテクチャ
 
-```
-┌─────────────┐     ┌─────────────────┐     ┌─────────────┐
-│  Producer   │────→│  Message Queue  │────→│  Consumer   │
-│ （送信側）    │     │   （キュー）      │     │  （受信側）   │
-└─────────────┘     └─────────────────┘     └─────────────┘
-      ↓                     ↓                     ↓
-  メッセージを          メッセージを           メッセージを
-  キューに投入          一時的に保存           取り出して処理
+```mermaid
+graph LR
+    A["Producer<br/>（送信側）"]
+    B["Message Queue<br/>（キュー）"]
+    C["Consumer<br/>（受信側）"]
+
+    A -->|"メッセージを<br/>キューに投入"| B
+    B -->|"メッセージを<br/>一時的に保存"| C
+    C -.->|"メッセージを<br/>取り出して処理"| C
+
+    style A fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    style B fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    style C fill:#e8f5e9,stroke:#388e3c,stroke-width:2px
 ```
 
 ### 用語解説
@@ -785,20 +790,29 @@ channel.queue_declare(
 
 ## Kafkaのアーキテクチャ
 
-```
-┌────────────────────────────────────────────────────────┐
-│                      Kafka Cluster                     │
-│  ┌─────────────────────────────────────────────────┐  │
-│  │                    Topic                         │  │
-│  │  ┌───────────┐ ┌───────────┐ ┌───────────┐      │  │
-│  │  │Partition 0│ │Partition 1│ │Partition 2│      │  │
-│  │  │  [0][1][2]│ │  [0][1]   │ │  [0][1][2]│      │  │
-│  │  └───────────┘ └───────────┘ └───────────┘      │  │
-│  └─────────────────────────────────────────────────┘  │
-└────────────────────────────────────────────────────────┘
-        ↑                                    ↓
-    Producer                           Consumer Group
-    (書き込み)                          (読み取り)
+```mermaid
+graph TB
+    subgraph cluster["Kafka Cluster"]
+        subgraph topic["Topic"]
+            p0["Partition 0<br/>[0][1][2]"]
+            p1["Partition 1<br/>[0][1]"]
+            p2["Partition 2<br/>[0][1][2]"]
+        end
+    end
+
+    producer["Producer<br/>（書き込み）"]
+    consumer["Consumer Group<br/>（読み取り）"]
+
+    producer -->|送信| topic
+    topic -->|取得| consumer
+
+    style cluster fill:#f5f5f5,stroke:#424242,stroke-width:2px
+    style topic fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    style p0 fill:#e3f2fd,stroke:#1976d2,stroke-width:1px
+    style p1 fill:#e3f2fd,stroke:#1976d2,stroke-width:1px
+    style p2 fill:#e3f2fd,stroke:#1976d2,stroke-width:1px
+    style producer fill:#c8e6c9,stroke:#388e3c,stroke-width:2px
+    style consumer fill:#ffccbc,stroke:#d84315,stroke-width:2px
 ```
 
 ### Kafkaの概念
@@ -1254,40 +1268,53 @@ groups:
 
 ### フローチャート
 
-```
-                    ┌─────────────────┐
-                    │ メッセージキューが必要 │
-                    └────────┬────────┘
-                             │
-              ┌──────────────┴──────────────┐
-              │ 既存インフラは？              │
-              └──────────────┬──────────────┘
-                    ┌────────┴────────┐
-                    ↓                 ↓
-               MySQL系            クラウド
-                    │                 │
-                    ↓                 ↓
-          ┌────────────────┐  ┌────────────────┐
-          │ Q4M使用中？     │  │ AWS？          │
-          └───────┬────────┘  └───────┬────────┘
-                  │                   │
-           Yes    │    No      Yes    │    No
-            ↓     ↓             ↓     ↓
-    ┌───────────┐ │     ┌────────┐    │
-    │移行を検討  │ │     │ SQS   │    │
-    └───────────┘ │     └────────┘    │
-                  ↓                   ↓
-          ┌─────────────┐     ┌─────────────┐
-          │ 要件は？    │     │ 要件は？    │
-          └──────┬──────┘     └──────┬──────┘
-                 │                   │
-    ┌────────────┼────────────┐     │
-    ↓            ↓            ↓     ↓
- シンプル    高機能      超高負荷   同左
-    ↓            ↓            ↓
- ┌─────┐   ┌─────────┐   ┌───────┐
- │Redis│   │RabbitMQ │   │ Kafka │
- └─────┘   └─────────┘   └───────┘
+```mermaid
+flowchart TD
+    start["メッセージキューが必要"]
+    infra{"既存インフラは？"}
+    mysql["MySQL系"]
+    cloud["クラウド"]
+    q4m{"Q4M使用中？"}
+    aws{"AWS？"}
+    migrate["移行を検討"]
+    sqs["SQS"]
+    req1{"要件は？"}
+    req2{"要件は？"}
+    simple["シンプル"]
+    advanced["高機能"]
+    highload["超高負荷"]
+    redis["Redis"]
+    rabbitmq["RabbitMQ"]
+    kafka["Kafka"]
+
+    start --> infra
+    infra -->|MySQL系| mysql
+    infra -->|クラウド| cloud
+    mysql --> q4m
+    cloud --> aws
+    q4m -->|Yes| migrate
+    q4m -->|No| req1
+    aws -->|Yes| sqs
+    aws -->|No| req2
+    req1 --> simple
+    req1 --> advanced
+    req1 --> highload
+    req2 --> simple
+    simple --> redis
+    advanced --> rabbitmq
+    highload --> kafka
+
+    style start fill:#e1f5fe,stroke:#01579b,stroke-width:2px
+    style infra fill:#fff9c4,stroke:#f57f17,stroke-width:2px
+    style q4m fill:#fff9c4,stroke:#f57f17,stroke-width:2px
+    style aws fill:#fff9c4,stroke:#f57f17,stroke-width:2px
+    style req1 fill:#fff9c4,stroke:#f57f17,stroke-width:2px
+    style req2 fill:#fff9c4,stroke:#f57f17,stroke-width:2px
+    style migrate fill:#ffccbc,stroke:#bf360c,stroke-width:2px
+    style sqs fill:#c8e6c9,stroke:#2e7d32,stroke-width:2px
+    style redis fill:#c8e6c9,stroke:#2e7d32,stroke-width:2px
+    style rabbitmq fill:#c8e6c9,stroke:#2e7d32,stroke-width:2px
+    style kafka fill:#c8e6c9,stroke:#2e7d32,stroke-width:2px
 ```
 
 ### 推奨まとめ

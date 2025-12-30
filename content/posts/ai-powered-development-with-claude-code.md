@@ -32,20 +32,21 @@ AIが「忘れる」のは、バグでも性能の問題でもない。
 LLMには記憶がない。
 毎回、**入力されたテキスト全体**を見て回答を生成している。
 
-```
-┌─────────────────────────────────────────┐
-│        コンテキストウィンドウ             │
-│                                         │
-│  ┌─────────────────────────────────┐   │
-│  │ システムプロンプト               │   │
-│  ├─────────────────────────────────┤   │
-│  │ 過去の会話履歴                   │   │
-│  ├─────────────────────────────────┤   │
-│  │ 今回の入力                       │   │
-│  └─────────────────────────────────┘   │
-│                                         │
-│  ← この枠に収まる範囲しか「見えない」 →  │
-└─────────────────────────────────────────┘
+```mermaid
+graph TB
+    subgraph Context["コンテキストウィンドウ<br/>← この枠に収まる範囲しか「見えない」 →"]
+        A["システムプロンプト"]
+        B["過去の会話履歴"]
+        C["今回の入力"]
+    end
+
+    A --> B
+    B --> C
+
+    style Context fill:#f0f0f0,stroke:#333,stroke-width:3px
+    style A fill:#e1f5ff
+    style B fill:#fff3e0
+    style C fill:#e8f5e9
 ```
 
 つまり、「覚えている」のではなく、「毎回全部読んでいる」。
@@ -108,14 +109,21 @@ CLAUDE.md（プロジェクト設定）  :  2,000 tokens
 
 LLMは**最初と最後の情報を重視**し、**中間を軽視**する傾向がある。
 
-```
-注意度
-  高 │██████                    ██████
-     │████████                ████████
-     │██████████            ██████████
-  低 │████████████████████████████████
-     └─────────────────────────────────→
-       最初      中間        最後
+```mermaid
+graph LR
+    subgraph Attention["LLMの注意度分布"]
+        Start["最初<br/>⬆️⬆️⬆️<br/>注意度: 高"]
+        Middle["中間<br/>⬇️⬇️⬇️<br/>注意度: 低"]
+        End["最後<br/>⬆️⬆️⬆️<br/>注意度: 高"]
+    end
+
+    Start -.->|軽視される| Middle
+    Middle -.->|重視される| End
+
+    style Start fill:#4caf50,color:#fff
+    style Middle fill:#ff9800,color:#fff
+    style End fill:#4caf50,color:#fff
+    style Attention fill:#fafafa,stroke:#666
 ```
 
 10,000行のコードを渡して「バグを探して」と言っても、
@@ -272,16 +280,27 @@ GET /api/products/search
 
 ### なぜ並行開発が有効か
 
-```
-直列作業:
-タスクA ──────→ タスクB ──────→ タスクC ──────→
-                              合計時間: A + B + C
+```mermaid
+graph TB
+    subgraph Serial["直列作業（合計時間: A + B + C）"]
+        A1[タスクA] --> B1[タスクB]
+        B1 --> C1[タスクC]
+    end
 
-並行作業:
-タスクA ──────→
-タスクB ──────→
-タスクC ──────→
-              合計時間: max(A, B, C)
+    subgraph Parallel["並行作業（合計時間: max A, B, C）"]
+        A2[タスクA]
+        B2[タスクB]
+        C2[タスクC]
+    end
+
+    style Serial fill:#ffebee
+    style Parallel fill:#e8f5e9
+    style A1 fill:#2196f3,color:#fff
+    style B1 fill:#2196f3,color:#fff
+    style C1 fill:#2196f3,color:#fff
+    style A2 fill:#4caf50,color:#fff
+    style B2 fill:#4caf50,color:#fff
+    style C2 fill:#4caf50,color:#fff
 ```
 
 独立したタスクは、複数のClaude Codeセッションで同時に進められる。

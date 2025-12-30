@@ -406,32 +406,25 @@ DELETE FROM users WHERE id = 123;
 
 ### アーキテクチャ
 
-```
-解約リクエスト
-      │
-      ▼
-┌─────────────────┐
-│ Step 1: 即時    │  論理削除 + サービス停止
-│ (解約時)        │
-└────────┬────────┘
-         │ 30日後
-         ▼
-┌─────────────────┐
-│ Step 2: 猶予後   │  行動ログ削除
-│ (30日後)        │  セッション削除
-└────────┬────────┘
-         │ 1年後
-         ▼
-┌─────────────────┐
-│ Step 3: 1年後   │  PII匿名化
-│                │  UGC削除/匿名化
-└────────┬────────┘
-         │ 7年後
-         ▼
-┌─────────────────┐
-│ Step 4: 7年後   │  取引記録アーカイブ
-│ (法定保存期間後) │  残存データ物理削除
-└─────────────────┘
+```mermaid
+graph TD
+    Request["解約リクエスト"]
+
+    Step1["Step 1: 即時（解約時）<br/>論理削除 + サービス停止"]
+    Step2["Step 2: 猶予後（30日後）<br/>行動ログ削除<br/>セッション削除"]
+    Step3["Step 3: 1年後<br/>PII匿名化<br/>UGC削除/匿名化"]
+    Step4["Step 4: 7年後（法定保存期間後）<br/>取引記録アーカイブ<br/>残存データ物理削除"]
+
+    Request --> Step1
+    Step1 -->|30日後| Step2
+    Step2 -->|1年後| Step3
+    Step3 -->|7年後| Step4
+
+    style Request fill:#ffebee
+    style Step1 fill:#fff3e0
+    style Step2 fill:#e8f5e9
+    style Step3 fill:#e1f5ff
+    style Step4 fill:#f3e5f5
 ```
 
 ### 実装コード（Python + SQLAlchemy）
