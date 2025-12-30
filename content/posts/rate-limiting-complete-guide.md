@@ -41,13 +41,34 @@ cover:
 
 ### Rate Limitingの効果
 
-```
-Before (Rate Limiting なし):
-User A: 1000 req/s → サーバー処理 → DB過負荷 → 全員に影響
+```mermaid
+graph TB
+    subgraph before["Rate Limiting なし"]
+        B1["User A<br/>1000 req/s"]
+        B2["サーバー処理"]
+        B3["DB過負荷"]
+        B4["全員に影響"]
 
-After (Rate Limiting あり):
-User A: 1000 req/s → Rate Limiter (10 req/s まで) → サーバー処理
-        ↓ 990 req/s は 429 Too Many Requests
+        B1 --> B2 --> B3 --> B4
+    end
+
+    subgraph after["Rate Limiting あり"]
+        A1["User A<br/>1000 req/s"]
+        A2["Rate Limiter<br/>(10 req/s まで)"]
+        A3["サーバー処理<br/>10 req/s"]
+        A4["990 req/s<br/>429 Too Many Requests"]
+
+        A1 --> A2
+        A2 -->|"10 req/s"| A3
+        A2 -->|"990 req/s"| A4
+    end
+
+    style before fill:#ffebee,stroke:#f44336,stroke-width:2px
+    style after fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
+    style B3 fill:#ffcdd2,stroke:#c62828
+    style B4 fill:#ffcdd2,stroke:#c62828
+    style A3 fill:#c8e6c9,stroke:#2e7d32
+    style A4 fill:#fff3e0,stroke:#f57c00
 ```
 
 ---
@@ -56,16 +77,20 @@ User A: 1000 req/s → Rate Limiter (10 req/s まで) → サーバー処理
 
 ### 1. 固定ウィンドウ（Fixed Window）
 
-```
-Window: 1分
+```mermaid
+gantt
+    title 固定ウィンドウ (1分ウィンドウ、100リクエストまで)
+    dateFormat mm:ss
+    axisFormat %M:%S
 
-0:00 - 0:59  → 100リクエストまで
-1:00 - 1:59  → 100リクエストまで
-2:00 - 2:59  → 100リクエストまで
+    section Window 1
+    100 req まで OK :w1, 00:00, 60s
 
-|-------- Window 1 --------|-------- Window 2 --------|
-0:00                    1:00                      2:00
-|  ←  100 req まで OK  →  |  ←  100 req まで OK  →  |
+    section Window 2
+    100 req まで OK :w2, 01:00, 60s
+
+    section Window 3
+    100 req まで OK :w3, 02:00, 60s
 ```
 
 **実装**:
@@ -108,13 +133,22 @@ class FixedWindowRateLimiter:
 **デメリット**:
 - **バースト問題**: ウィンドウの境界で2倍のリクエストが通る
 
-```
-Window境界でのバースト:
-|-------- Window 1 --------|-------- Window 2 --------|
-                      0:59 | 1:00
-                100 req →  | ← 100 req
-                           ↑
-                   この1秒間に200リクエストが通る
+```mermaid
+gantt
+    title Window境界でのバースト問題
+    dateFormat mm:ss
+    axisFormat %M:%S
+
+    section Window 1
+    リクエスト受付中 :w1, 00:00, 59s
+    100 req到達 :crit, burst1, 00:59, 1s
+
+    section Window 2
+    100 req到達 :crit, burst2, 01:00, 1s
+    リクエスト受付中 :w2, 01:01, 59s
+
+    section 問題
+    1秒間に200 req :milestone, critical, 00:59, 2s
 ```
 
 ### 2. スライディングウィンドウログ（Sliding Window Log）
@@ -230,21 +264,31 @@ class SlidingWindowCounterRateLimiter:
 
 ### 4. トークンバケット（Token Bucket）
 
-```
-バケット容量: 10 トークン
-補充レート: 1 トークン/秒
+```mermaid
+graph TB
+    subgraph bucket["トークンバケット"]
+        direction TB
+        State["現在: 7トークン"]
+        Capacity["容量: 10トークン"]
+        Refill["補充レート: 1トークン/秒"]
+    end
 
-|  バケット  |
-|  ○○○○○○○  |  ← 7トークン残っている
-|  ○○○     |
-|___________|
+    Request["リクエスト"]
+    Check{トークンあり?}
+    Allow["許可<br/>(トークン-1)"]
+    Deny["拒否<br/>(429)"]
+    Time["時間経過<br/>(1秒)"]
+    Add["トークン+1<br/>(最大10まで)"]
 
-リクエスト時:
-- トークンがあれば1つ消費して許可
-- トークンがなければ拒否
+    Request --> Check
+    Check -->|"Yes (7 → 6)"| Allow
+    Check -->|"No (0)"| Deny
+    Time --> Add --> bucket
 
-時間経過:
-- 1秒ごとに1トークン補充（最大10まで）
+    style bucket fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    style Allow fill:#c8e6c9,stroke:#2e7d32
+    style Deny fill:#ffcdd2,stroke:#c62828
+    style Add fill:#fff3e0,stroke:#f57c00
 ```
 
 **実装**:
@@ -291,22 +335,31 @@ class TokenBucketRateLimiter:
 
 ### 5. リーキーバケット（Leaky Bucket）
 
-```
-バケット容量: 10 リクエスト
-流出レート: 1 リクエスト/秒
+```mermaid
+graph TB
+    Request["新しいリクエスト"]
+    Check{バケットに空き?}
+    Queue["バケットに追加<br/>(7リクエスト待機中)"]
+    Deny["拒否<br/>(429)"]
+    Process["1 req/秒で<br/>一定レートで処理"]
 
-|  バケット  |
-|  ●●●●●●●  |  ← 7リクエストが待機中
-|  ●●●     |
-|____↓_____|
-     ↓ 1 req/秒 で流出（処理）
+    subgraph bucket["リーキーバケット"]
+        direction TB
+        Waiting["待機中: 7リクエスト"]
+        Capacity["容量: 10リクエスト"]
+        LeakRate["流出レート: 1 req/秒"]
+    end
 
-リクエスト時:
-- バケットに空きがあれば追加
-- 空きがなければ拒否
+    Request --> Check
+    Check -->|"Yes (< 10)"| Queue
+    Check -->|"No (= 10)"| Deny
+    Queue --> bucket
+    bucket --> Process
 
-処理:
-- 一定レートでバケットから取り出して処理
+    style bucket fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    style Queue fill:#fff3e0,stroke:#f57c00
+    style Deny fill:#ffcdd2,stroke:#c62828
+    style Process fill:#c8e6c9,stroke:#2e7d32
 ```
 
 **実装**:
@@ -713,39 +766,42 @@ async function fetchWithRateLimit(url) {
 
 ### 問題: 複数サーバーでのカウント
 
-```
-        ┌─────────────────────────────────────┐
-        │          Load Balancer              │
-        └──────┬──────────────┬───────────────┘
-               │              │
-        ┌──────▼────┐  ┌──────▼────┐
-        │ Server A  │  │ Server B  │
-        │ count: 50 │  │ count: 50 │
-        └───────────┘  └───────────┘
+```mermaid
+graph TB
+    LB["Load Balancer"]
+    ServerA["Server A<br/>count: 50"]
+    ServerB["Server B<br/>count: 50"]
+    Problem["❌ 問題<br/>User の実際のリクエスト数: 100<br/>各サーバーが認識: 50<br/>制限が効いていない！"]
 
-User の実際のリクエスト数: 100
-各サーバーが認識しているカウント: 50
+    LB --> ServerA
+    LB --> ServerB
+    ServerA --> Problem
+    ServerB --> Problem
 
-→ 制限が効いていない！
+    style LB fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    style ServerA fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    style ServerB fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    style Problem fill:#ffcdd2,stroke:#c62828,stroke-width:2px
 ```
 
 ### 解決策: 中央集権的なストア
 
-```
-        ┌─────────────────────────────────────┐
-        │          Load Balancer              │
-        └──────┬──────────────┬───────────────┘
-               │              │
-        ┌──────▼────┐  ┌──────▼────┐
-        │ Server A  │  │ Server B  │
-        └─────┬─────┘  └─────┬─────┘
-              │              │
-              └──────┬───────┘
-                     │
-              ┌──────▼──────┐
-              │    Redis    │  ← 中央でカウント管理
-              │  count: 100 │
-              └─────────────┘
+```mermaid
+graph TB
+    LB["Load Balancer"]
+    ServerA["Server A"]
+    ServerB["Server B"]
+    Redis["Redis<br/>count: 100<br/>✅ 中央でカウント管理"]
+
+    LB --> ServerA
+    LB --> ServerB
+    ServerA --> Redis
+    ServerB --> Redis
+
+    style LB fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    style ServerA fill:#c8e6c9,stroke:#2e7d32,stroke-width:2px
+    style ServerB fill:#c8e6c9,stroke:#2e7d32,stroke-width:2px
+    style Redis fill:#fff3e0,stroke:#f57c00,stroke-width:3px
 ```
 
 ### Redis Cluster での注意点
@@ -792,21 +848,23 @@ return current <= limit and 1 or 0
 
 ### レイヤーごとの制限
 
-```
-                    ┌───────────────────────────┐
-                    │       CDN/WAF             │ ← L1: IP単位、粗い制限
-                    │  (Cloudflare, AWS WAF)   │    例: 1000 req/min
-                    └─────────────┬─────────────┘
-                                  │
-                    ┌─────────────▼─────────────┐
-                    │      Load Balancer        │ ← L2: Nginx
-                    │         (Nginx)           │    例: 100 req/s
-                    └─────────────┬─────────────┘
-                                  │
-                    ┌─────────────▼─────────────┐
-                    │      Application          │ ← L3: ユーザー/API単位
-                    │    (Flask + Redis)        │    例: プランに応じた制限
-                    └───────────────────────────┘
+```mermaid
+graph TB
+    Client["クライアント"]
+    L1["L1: CDN/WAF<br/>(Cloudflare, AWS WAF)<br/>IP単位、粗い制限<br/>例: 1000 req/min"]
+    L2["L2: Load Balancer<br/>(Nginx)<br/>例: 100 req/s"]
+    L3["L3: Application<br/>(Flask + Redis)<br/>ユーザー/API単位<br/>例: プランに応じた制限"]
+    Backend["バックエンド処理"]
+
+    Client --> L1
+    L1 --> L2
+    L2 --> L3
+    L3 --> Backend
+
+    style L1 fill:#ffebee,stroke:#f44336,stroke-width:2px
+    style L2 fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    style L3 fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
+    style Backend fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
 ```
 
 ### プラン別の制限
