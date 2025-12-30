@@ -26,28 +26,49 @@ cover:
 
 ### 分散システムの現実
 
-```
-【理想】
-サービスA → サービスB → サービスC
-   ↓           ↓           ↓
-  常に正常    常に正常    常に正常
+```mermaid
+graph LR
+    subgraph ideal["理想"]
+        A1["サービスA<br/>✅ 常に正常"]
+        B1["サービスB<br/>✅ 常に正常"]
+        C1["サービスC<br/>✅ 常に正常"]
+        A1 --> B1 --> C1
+    end
 
-【現実】
-サービスA → サービスB → サービスC
-   ↓           ↓           ↓
-  正常      たまに遅い   ときどき落ちる
-            ネットワーク断
-            タイムアウト
+    subgraph reality["現実"]
+        A2["サービスA<br/>✅ 正常"]
+        B2["サービスB<br/>⚠️ たまに遅い<br/>ネットワーク断<br/>タイムアウト"]
+        C2["サービスC<br/>❌ ときどき落ちる"]
+        A2 --> B2 --> C2
+    end
+
+    style ideal fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
+    style reality fill:#ffebee,stroke:#f44336,stroke-width:2px
+    style A1 fill:#c8e6c9,stroke:#2e7d32
+    style B1 fill:#c8e6c9,stroke:#2e7d32
+    style C1 fill:#c8e6c9,stroke:#2e7d32
+    style A2 fill:#c8e6c9,stroke:#2e7d32
+    style B2 fill:#fff3e0,stroke:#f57c00
+    style C2 fill:#ffcdd2,stroke:#c62828
 ```
 
 ### 何も対策しないと
 
-```
-1. サービスCが遅くなる
-2. サービスBがCを待ち続ける
-3. サービスBのスレッドが枯渇
-4. サービスAもBを待ち続ける
-5. 全体が連鎖的に死ぬ 💀
+```mermaid
+sequenceDiagram
+    participant A as サービスA
+    participant B as サービスB
+    participant C as サービスC
+
+    Note over C: 1. サービスCが遅くなる
+    A->>B: リクエスト
+    B->>C: リクエスト
+    Note over B,C: 2. サービスBがCを待ち続ける
+    Note over B: 3. スレッド枯渇
+    A->>B: 別のリクエスト
+    Note over A,B: 4. サービスAもBを待ち続ける
+    Note over A: スレッド枯渇
+    Note over A,B,C: 5. 全体が連鎖的に死ぬ 💀
 ```
 
 **これが「障害の連鎖」です。**
@@ -80,16 +101,35 @@ response = requests.get("https://slow-api.example.com/data", timeout=5)
 
 ## なぜタイムアウトが必要か
 
-```
-【タイムアウトなし】
-リクエスト → 待機... → 待機... → 待機... → (スレッド/コネクション枯渇)
-                ↓
-        他のリクエストも処理できなくなる
+```mermaid
+graph TB
+    subgraph without["タイムアウトなし"]
+        W1["リクエスト"]
+        W2["待機..."]
+        W3["待機..."]
+        W4["待機..."]
+        W5["スレッド/コネクション枯渇"]
+        W6["他のリクエストも<br/>処理できなくなる"]
 
-【タイムアウトあり】
-リクエスト → 待機 → タイムアウト → リソース解放
-                           ↓
-                    他のリクエストを処理可能
+        W1 --> W2 --> W3 --> W4 --> W5 --> W6
+    end
+
+    subgraph with["タイムアウトあり"]
+        T1["リクエスト"]
+        T2["待機"]
+        T3["タイムアウト"]
+        T4["リソース解放"]
+        T5["他のリクエストを<br/>処理可能"]
+
+        T1 --> T2 --> T3 --> T4 --> T5
+    end
+
+    style without fill:#ffebee,stroke:#f44336,stroke-width:2px
+    style with fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
+    style W5 fill:#ffcdd2,stroke:#c62828
+    style W6 fill:#ffcdd2,stroke:#c62828
+    style T4 fill:#c8e6c9,stroke:#2e7d32
+    style T5 fill:#c8e6c9,stroke:#2e7d32
 ```
 
 ## タイムアウトの種類
@@ -643,16 +683,32 @@ def process_payment_with_check(order_id, amount, redis_client):
 
 電気のブレーカーと同じ発想：**異常を検知したら回路を切る**
 
-```
-【サーキットブレーカーなし】
-リクエスト → 障害中のサービス → タイムアウト → リトライ → タイムアウト...
-                                    ↓
-                            リソース枯渇、連鎖障害
+```mermaid
+graph TB
+    subgraph without["サーキットブレーカーなし"]
+        W1["リクエスト"]
+        W2["障害中のサービス"]
+        W3["タイムアウト"]
+        W4["リトライ"]
+        W5["タイムアウト..."]
+        W6["リソース枯渇<br/>連鎖障害"]
 
-【サーキットブレーカーあり】
-リクエスト → 「このサービスは壊れている」→ 即座にエラーを返す
-                                    ↓
-                            リソースを守る、復旧を待つ
+        W1 --> W2 --> W3 --> W4 --> W5 --> W6
+    end
+
+    subgraph with["サーキットブレーカーあり"]
+        T1["リクエスト"]
+        T2["このサービスは<br/>壊れている"]
+        T3["即座にエラーを返す"]
+        T4["リソースを守る<br/>復旧を待つ"]
+
+        T1 --> T2 --> T3 --> T4
+    end
+
+    style without fill:#ffebee,stroke:#f44336,stroke-width:2px
+    style with fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
+    style W6 fill:#ffcdd2,stroke:#c62828
+    style T4 fill:#c8e6c9,stroke:#2e7d32
 ```
 
 ## 3つの状態
@@ -1232,14 +1288,21 @@ groups:
 
 ### 3つのパターンの関係
 
-```
-タイムアウト: 「待ちすぎない」
-    ↓ 失敗したら
-リトライ: 「もう一度試す」
-    ↓ 失敗が続いたら
-サーキットブレーカー: 「しばらく諦める」
-    ↓ 必要なら
-フォールバック: 「代替手段で対応」
+```mermaid
+graph TB
+    Timeout["タイムアウト<br/>「待ちすぎない」"]
+    Retry["リトライ<br/>「もう一度試す」"]
+    CB["サーキットブレーカー<br/>「しばらく諦める」"]
+    Fallback["フォールバック<br/>「代替手段で対応」"]
+
+    Timeout -->|"失敗したら"| Retry
+    Retry -->|"失敗が続いたら"| CB
+    CB -->|"必要なら"| Fallback
+
+    style Timeout fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    style Retry fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    style CB fill:#ffebee,stroke:#f44336,stroke-width:2px
+    style Fallback fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
 ```
 
 ### それぞれの役割
