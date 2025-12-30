@@ -95,11 +95,19 @@ graph TB
 
 ### Client 1 が Node A に書き込み
 
-```
-Client 1 → Node A: WRITE data = 2
+```mermaid
+sequenceDiagram
+    participant C1 as Client 1
+    participant NA as Node A
+    participant NB as Node B
 
-Node A: Data = 2
-Node B: Data = 1 (分断により同期できない)
+    C1->>NA: WRITE data = 2
+    NA->>NA: Data = 2
+    NA-xNB: ✗ 分断により同期できない
+    Note over NB: Data = 1 (古いまま)
+
+    style NA fill:#e3f2fd
+    style NB fill:#ffebee
 ```
 
 ### Client 2 が Node B から読み取りしようとする
@@ -108,32 +116,74 @@ Node B: Data = 1 (分断により同期できない)
 
 #### 選択1: 一貫性（C）を優先
 
-```
-Client 2 → Node B: READ data
-Node B: 「Node A と同期できないので、応答できません」
-Client 2 ← Node B: ERROR (利用不可)
+```mermaid
+sequenceDiagram
+    participant C2 as Client 2
+    participant NB as Node B
+    participant NA as Node A
+
+    C2->>NB: READ data
+    NB-xNA: ✗ 同期できない
+    NB-->>C2: ERROR (利用不可)
+    Note over C2,NB: 一貫性は保たれる<br/>不正確なデータは返さない<br/>可用性を失う
+
+    style NB fill:#e3f2fd,stroke:#1976d2
+    style C2 fill:#ffebee
 ```
 
 **結果**: 一貫性は保たれる（不正確なデータを返さない）が、可用性を失う
 
 #### 選択2: 可用性（A）を優先
 
-```
-Client 2 → Node B: READ data
-Node B: 「古いデータかもしれないけど、応答します」
-Client 2 ← Node B: data = 1 (古いデータ)
+```mermaid
+sequenceDiagram
+    participant C2 as Client 2
+    participant NB as Node B
+    participant NA as Node A
+
+    C2->>NB: READ data
+    NB-xNA: ✗ 同期できない
+    NB-->>C2: data = 1 (古いデータ)
+    Note over C2,NB: 可用性は保たれる<br/>応答は返す<br/>一貫性を失う
+
+    style NB fill:#e8f5e9,stroke:#4caf50
+    style C2 fill:#fff9c4
 ```
 
 **結果**: 可用性は保たれる（応答は返す）が、一貫性を失う
 
 ### これがCAP定理の本質
 
-```
-ネットワーク分断（P）が起きたとき:
-- C を取る → A を捨てる（応答しない）
-- A を取る → C を捨てる（古いデータを返す）
+```mermaid
+graph TB
+    partition["ネットワーク分断(P)が起きたとき"]
+    choice{{"選択が必要"}}
 
-両方同時には無理
+    subgraph cp["C を優先"]
+        c_take["✓ 一貫性を保証"]
+        a_drop["✗ 可用性を捨てる<br/>(応答しない)"]
+    end
+
+    subgraph ap["A を優先"]
+        a_take["✓ 可用性を保証"]
+        c_drop["✗ 一貫性を捨てる<br/>(古いデータを返す)"]
+    end
+
+    partition --> choice
+    choice -->|"CP"| cp
+    choice -->|"AP"| ap
+
+    note["⚠️ 両方同時には無理"]
+
+    style partition fill:#ffebee,stroke:#d32f2f,stroke-width:3px
+    style choice fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    style cp fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    style ap fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
+    style c_take fill:#c8e6c9
+    style a_drop fill:#ffcdd2
+    style a_take fill:#c8e6c9
+    style c_drop fill:#ffcdd2
+    style note fill:#fff9c4,stroke:#f57f17,stroke-width:2px
 ```
 
 ---
@@ -142,10 +192,22 @@ Client 2 ← Node B: data = 1 (古いデータ)
 
 ### CP（一貫性 + 分断耐性）
 
-```
-分断発生時の動作:
-- 一貫性を保証
-- 可用性を犠牲にする（応答しない）
+```mermaid
+graph LR
+    subgraph CP["CP: 一貫性 + 分断耐性"]
+        direction TB
+        action["分断発生時の動作"]
+        c["✓ 一貫性を保証"]
+        a["✗ 可用性を犠牲<br/>(応答しない)"]
+
+        action --> c
+        action --> a
+    end
+
+    style CP fill:#e3f2fd,stroke:#1976d2,stroke-width:3px
+    style action fill:#fff3e0,stroke:#f57c00
+    style c fill:#c8e6c9,stroke:#4caf50,stroke-width:2px
+    style a fill:#ffcdd2,stroke:#f44336,stroke-width:2px
 ```
 
 **代表的なシステム**:
@@ -162,10 +224,22 @@ Client 2 ← Node B: data = 1 (古いデータ)
 
 ### AP（可用性 + 分断耐性）
 
-```
-分断発生時の動作:
-- 可用性を保証（常に応答）
-- 一貫性を犠牲にする（古いデータの可能性）
+```mermaid
+graph LR
+    subgraph AP["AP: 可用性 + 分断耐性"]
+        direction TB
+        action["分断発生時の動作"]
+        a["✓ 可用性を保証<br/>(常に応答)"]
+        c["✗ 一貫性を犠牲<br/>(古いデータの可能性)"]
+
+        action --> a
+        action --> c
+    end
+
+    style AP fill:#e8f5e9,stroke:#4caf50,stroke-width:3px
+    style action fill:#fff3e0,stroke:#f57c00
+    style a fill:#c8e6c9,stroke:#4caf50,stroke-width:2px
+    style c fill:#ffcdd2,stroke:#f44336,stroke-width:2px
 ```
 
 **代表的なシステム**:
@@ -182,9 +256,25 @@ Client 2 ← Node B: data = 1 (古いデータ)
 
 ### CA（一貫性 + 可用性）
 
-```
-「分断耐性なし」= 分断が起きない前提
-→ 実質的に単一ノード or 同一ネットワーク内
+```mermaid
+graph LR
+    subgraph CA["CA: 一貫性 + 可用性"]
+        direction TB
+        premise["前提条件"]
+        p["✗ 分断耐性なし<br/>(分断が起きない前提)"]
+        reality["実質的に"]
+        single["単一ノード or<br/>同一ネットワーク内"]
+
+        premise --> p
+        p --> reality
+        reality --> single
+    end
+
+    style CA fill:#fff3e0,stroke:#f57c00,stroke-width:3px
+    style premise fill:#e3f2fd,stroke:#1976d2
+    style p fill:#ffcdd2,stroke:#f44336,stroke-width:2px
+    style reality fill:#f5f5f5,stroke:#666
+    style single fill:#fff9c4,stroke:#f57f17
 ```
 
 **代表的なシステム**:
@@ -209,26 +299,54 @@ CAP定理の「C」は強い一貫性を指すが、実際にはいくつかの�
 
 ### 強い一貫性（Strong Consistency）
 
-```
-全ての読み取りが、最新の書き込みを返す
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant N1 as Node 1
+    participant N2 as Node 2
 
-Write: data = 2
-       ↓ 即座に反映
-Read:  data = 2 ✓
+    C->>N1: Write: data = 2
+    N1->>N2: 同期レプリケーション
+    N2-->>N1: ACK
+    N1-->>C: 完了
+
+    C->>N2: Read
+    N2-->>C: data = 2 ✓
+    Note over C,N2: 全ての読み取りが<br/>最新の書き込みを返す
+
+    style N1 fill:#e3f2fd,stroke:#1976d2
+    style N2 fill:#e3f2fd,stroke:#1976d2
+    style C fill:#c8e6c9,stroke:#4caf50
 ```
 
 **実現方法**: 同期レプリケーション、2フェーズコミット
 
 ### 結果整合性（Eventual Consistency）
 
-```
-時間が経てば、全ノードが同じデータになる
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant N1 as Node 1
+    participant N2 as Node 2
 
-Write: data = 2
-       ↓ 非同期で反映
-Read:  data = 1 (古いかも)
-       ↓ 少し待つ
-Read:  data = 2 ✓
+    C->>N1: Write: data = 2
+    N1-->>C: 即座に完了
+    Note over N1,N2: 非同期でレプリケーション
+    N1--)N2: バックグラウンド同期
+
+    C->>N2: Read (すぐ)
+    N2-->>C: data = 1 (古いかも)
+
+    Note over N2: 少し待つ...
+    N2->>N2: 同期完了
+
+    C->>N2: Read (後で)
+    N2-->>C: data = 2 ✓
+    Note over C,N2: 時間が経てば<br/>全ノードが同じデータになる
+
+    style N1 fill:#e8f5e9,stroke:#4caf50
+    style N2 fill:#e8f5e9,stroke:#4caf50
+    style C fill:#fff9c4,stroke:#f57f17
 ```
 
 **実現方法**: 非同期レプリケーション、バックグラウンド同期
@@ -365,13 +483,32 @@ E: Else（通常時）
 
 ### なぜ通常時もトレードオフがあるのか
 
-```
-強い一貫性を保つには:
-Write → 全ノードに同期 → 遅い（レイテンシ増加）
+```mermaid
+graph TB
+    subgraph strong["強い一貫性"]
+        w1["Write"]
+        sync1["全ノードに同期"]
+        slow["遅い<br/>(レイテンシ増加)"]
 
-結果整合性なら:
-Write → ローカルに書いて即応答 → 速い（低レイテンシ）
-        → バックグラウンドで同期
+        w1 --> sync1
+        sync1 --> slow
+    end
+
+    subgraph eventual["結果整合性"]
+        w2["Write"]
+        local["ローカルに書いて<br/>即応答"]
+        fast["速い<br/>(低レイテンシ)"]
+        bg["バックグラウンドで同期"]
+
+        w2 --> local
+        local --> fast
+        local -.-> bg
+    end
+
+    style strong fill:#e3f2fd,stroke:#1976d2,stroke-width:3px
+    style eventual fill:#e8f5e9,stroke:#4caf50,stroke-width:3px
+    style slow fill:#ffcdd2,stroke:#f44336
+    style fast fill:#c8e6c9,stroke:#2e7d32
 ```
 
 ### データベースの分類（PACELC）
