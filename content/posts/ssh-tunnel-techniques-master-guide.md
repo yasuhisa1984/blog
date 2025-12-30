@@ -15,7 +15,8 @@ cover:
 
 - **トンネルは「逃げ」ではなく「現実解」**：API構築やVPCピアリングが難しい現場では、SSHトンネルが最も早く安全に繋げる手段になる
 - **正しく制御すれば、監査・セキュリティも通せる**：専用ユーザー、鍵管理、ForceCommandで「誰が何をしたか」を追跡可能
-- **7つの神テクニック**を押さえれば、ほとんどの「繋がらない」問題は突破できる
+- **11の神テクニック**（基本7つ + 実践4つ）を押さえれば、開発現場のあらゆる「繋がらない」問題を突破できる
+- **実機プレビュー、スマホ開発、リモート開発**など、実践的なテクニックも網羅
 - **APIを作るべきか、トンネルで済ますか**の判断基準を持つことで、設計の説明責任を果たせる
 - **段階的に改善するロードマップ**があれば、「最小構成」から始めても後から怒られない
 
@@ -745,6 +746,758 @@ gcloud compute start-iap-tunnel instance-name 3306 \
 
 ---
 
+### 神テク⑧ BrowserSync / Vite × SSHトンネルで実機ライブプレビュー
+
+**用途**：ローカル開発サーバーを、社内ネットワークやクラウド上の実機で確認
+
+```mermaid
+graph LR
+    subgraph Local["開発者PC"]
+        Vite["Vite Dev Server<br/>localhost:5173"]
+        SSH_Client["SSH Client"]
+    end
+
+    subgraph Internet["インターネット"]
+        Tunnel["SSH Tunnel<br/>暗号化"]
+    end
+
+    subgraph Cloud["社内ネットワーク / クラウド"]
+        Bastion["踏み台サーバー<br/>bastion.example.com"]
+        LocalForward["localhost:5173<br/>(踏み台上)"]
+        iPhone["iPhone Safari"]
+        Android["Android Chrome"]
+        DevTeam["他の開発メンバー"]
+    end
+
+    Vite --> SSH_Client
+    SSH_Client -->|"ssh -R 5173:localhost:5173"| Tunnel
+    Tunnel --> Bastion
+    Bastion --> LocalForward
+    iPhone -->|"http://bastion.example.com:5173"| LocalForward
+    Android -->|"http://bastion.example.com:5173"| LocalForward
+    DevTeam -->|"http://bastion.example.com:5173"| LocalForward
+
+    style Local fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    style Cloud fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    style Tunnel fill:#c8e6c9,stroke:#2e7d32,stroke-width:2px
+    style Vite fill:#bbdefb,stroke:#1976d2
+    style LocalForward fill:#ffecb3,stroke:#f57c00
+```
+
+**メリット**
+
+```
+✅ ngrok不要で、外部サービスに依存しない
+✅ コード変更が即座に実機に反映される（HMR対応）
+✅ 複数デバイスで同時プレビュー可能
+✅ 社内ネットワークで完結するため、情報漏洩リスクが低い
+✅ SSL証明書の設定不要（開発段階）
+```
+
+**Vite + リモートポートフォワードのセットアップ**
+
+```bash
+# 1. Vite開発サーバーを起動（全インターフェースでリッスン）
+# vite.config.ts で設定
+export default defineConfig({
+  server: {
+    host: '0.0.0.0',  // 重要：外部からアクセス可能にする
+    port: 5173
+  }
+})
+
+# ターミナルで起動
+npm run dev
+
+# 2. SSHリモートポートフォワードで公開
+ssh -R 5173:localhost:5173 user@bastion.example.com
+
+# 3. 踏み台サーバー上で確認
+curl http://localhost:5173
+
+# 4. iPhone/Androidから接続
+# Wi-Fiで同じネットワークに接続し、ブラウザで
+http://bastion.example.com:5173
+```
+
+**BrowserSyncの場合**
+
+```bash
+# BrowserSyncをインストール
+npm install -g browser-sync
+
+# 開発サーバーをプロキシ
+browser-sync start --proxy "localhost:3000" --port 3001 --no-open
+
+# リモートポートフォワード
+ssh -R 3001:localhost:3001 user@bastion.example.com
+
+# 複数デバイスで http://bastion.example.com:3001 にアクセス
+# → スクロール・クリックが全デバイスで同期される！
+```
+
+**実案件での使用例**
+
+```
+【状況】
+- レスポンシブ対応のWebアプリを開発中
+- iPhone/Android実機での動作確認が必要
+- ngrokは社内ポリシーで使用禁止
+- 開発環境はプライベートサブネット内
+
+【構成】
+開発者PC → SSHトンネル → 踏み台サーバー（社内ネットワーク）
+                            ↓
+                        実機（iPhone/Android）
+
+【メリット】
+- 外部サービス不要
+- 監査ログで「誰がいつ接続したか」追跡可能
+- コード変更が即座に反映（開発効率向上）
+```
+
+**セキュリティ担当への説明文**
+
+```
+このSSHリモートポートフォワードは、以下の理由で安全です：
+
+✅ 外部インターネットに公開しない
+   - 踏み台サーバーのlocalhostに限定（GatewayPorts no）
+   - 社内ネットワーク内からのみアクセス可能
+
+✅ 通信は暗号化
+   - SSH経由のため、通信内容は暗号化される
+
+✅ 一時的な使用
+   - 開発中のみトンネルを開く
+   - 終了時は自動的にクローズ
+
+✅ 監査可能
+   - SSHログで接続履歴を追跡
+   - ForceCommandで許可するポートを制限可能
+```
+
+**注意点とベストプラクティス**
+
+```bash
+# 危険：外部に公開してしまう
+ssh -R 0.0.0.0:5173:localhost:5173 user@bastion  # ❌
+
+# 安全：localhostに限定
+ssh -R 127.0.0.1:5173:localhost:5173 user@bastion  # ✅
+
+# さらに安全：sshd_config で制限
+# /etc/ssh/sshd_config
+GatewayPorts no  # デフォルトで有効化すべき
+
+# 使用後は必ずトンネルを閉じる
+ps aux | grep ssh
+kill <PID>
+```
+
+**チームでの運用例**
+
+```bash
+# チーム全員が同じ踏み台経由で確認する場合
+# 開発者Aがトンネルを開く
+ssh -R 5173:localhost:5173 dev-user@dev-bastion
+
+# チームメンバーは踏み台にSSHし、ポートフォワードで手元に持ってくる
+ssh -L 8080:localhost:5173 dev-user@dev-bastion
+
+# ブラウザで http://localhost:8080 にアクセス
+# → 開発者Aの開発サーバーが見える
+```
+
+---
+
+### 神テク⑨ SOCKS + ローカルHTTPプロキシでスマホ通信も全部トンネル化
+
+**用途**：スマホアプリの開発・デバッグで、内部APIへの通信をトンネル経由にする
+
+```mermaid
+graph TB
+    subgraph Local["開発者PC"]
+        SOCKS["SOCKSプロキシ<br/>localhost:1080"]
+        TinyProxy["tinyproxy<br/>localhost:8888"]
+    end
+
+    subgraph Mobile["スマートフォン"]
+        iOS["iPhone"]
+        Android["Android"]
+    end
+
+    subgraph Internet["インターネット"]
+        Tunnel["SSH Tunnel<br/>暗号化"]
+    end
+
+    subgraph Cloud["閉域ネットワーク"]
+        Bastion["踏み台サーバー"]
+        API["内部API<br/>api.internal"]
+        DB["内部DB"]
+    end
+
+    iOS -->|"Wi-Fi設定<br/>HTTPプロキシ<br/>192.168.1.100:8888"| TinyProxy
+    Android -->|"Wi-Fi設定<br/>HTTPプロキシ<br/>192.168.1.100:8888"| TinyProxy
+    TinyProxy -->|"SOCKS5変換"| SOCKS
+    SOCKS -->|"ssh -D 1080"| Tunnel
+    Tunnel --> Bastion
+    Bastion --> API
+    Bastion --> DB
+
+    style Local fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    style Mobile fill:#e1bee7,stroke:#8e24aa,stroke-width:2px
+    style Cloud fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    style Tunnel fill:#c8e6c9,stroke:#2e7d32,stroke-width:2px
+```
+
+**メリット**
+
+```
+✅ スマホアプリから内部APIに直接アクセス可能
+✅ VPN設定不要（Wi-Fiプロキシ設定だけ）
+✅ Charles / Fiddler のようなプロキシツールと併用可能
+✅ 開発中のアプリで本番環境のようなAPI接続をテスト
+✅ 証明書エラー回避（開発環境では自己署名証明書を許容）
+```
+
+**セットアップ手順**
+
+```bash
+# 1. SOCKSプロキシを立てる
+ssh -D 1080 bastion@bastion.example.com
+
+# 2. tinyproxy をインストール（macOS）
+brew install tinyproxy
+
+# 3. tinyproxy の設定ファイルを編集
+# /opt/homebrew/etc/tinyproxy/tinyproxy.conf
+Port 8888
+Listen 0.0.0.0  # 全インターフェースでリッスン
+Upstream socks5 localhost:1080  # SOCKSプロキシを上流に設定
+
+# 4. tinyproxy を起動
+tinyproxy -d -c /opt/homebrew/etc/tinyproxy/tinyproxy.conf
+
+# 5. PCのローカルIPを確認
+ifconfig | grep "inet "
+# 例：192.168.1.100
+```
+
+**iPhone での設定**
+
+```
+1. 設定 → Wi-Fi → 接続中のネットワークをタップ
+2. 「HTTPプロキシ」→「プロキシを構成」
+3. 「手動」を選択
+   - サーバ: 192.168.1.100（開発者PCのIP）
+   - ポート: 8888
+4. 保存
+
+5. SafariやアプリでAPIにアクセス
+   http://api.internal/users
+   → トンネル経由で内部APIに到達！
+```
+
+**Android での設定**
+
+```
+1. 設定 → ネットワークとインターネット → Wi-Fi
+2. 接続中のネットワークを長押し → 「ネットワークを変更」
+3. 「詳細設定」→「プロキシ」→「手動」
+   - プロキシホスト名: 192.168.1.100
+   - プロキシポート: 8888
+4. 保存
+
+5. Chrome や開発中のアプリで確認
+```
+
+**実案件での使用例**
+
+```
+【状況】
+- iOS/Androidアプリ開発中
+- 内部APIはVPC内のプライベートサブネット
+- VPN接続は申請が面倒で時間がかかる
+- 開発者のスマホから内部APIを叩きたい
+
+【構成】
+スマホ → Wi-Fiプロキシ → tinyproxy → SOCKS → SSHトンネル → 内部API
+
+【メリット】
+- VPN不要
+- プロキシ設定のON/OFF だけで切り替え可能
+- Charles Proxy と併用してリクエスト/レスポンスを確認できる
+```
+
+**Charles Proxy と組み合わせた高度な使い方**
+
+```bash
+# Charles Proxy を経由させる（リクエスト/レスポンスを確認）
+# Charles の External Proxy 設定
+Proxy → External Proxy Settings
+  ☑ Use external proxy servers
+  Web Proxy (HTTP): localhost:8888
+
+# スマホのプロキシ設定
+# Charles が動いているPCのIP:8888 に設定
+
+# これで以下が可能：
+# 1. スマホ → Charles → tinyproxy → SOCKS → 内部API
+# 2. Charles でリクエスト/レスポンスを確認
+# 3. Breakpoint でリクエストを改変してテスト
+```
+
+**セキュリティ上の注意**
+
+```
+⚠️ HTTPプロキシはVPNに近い動作をするため、管理が重要
+
+【リスク】
+❌ tinyproxy を 0.0.0.0 で公開すると、同じWi-Fi上の第三者が利用可能
+❌ スマホのプロキシ設定を忘れると、通常の通信が失敗する
+❌ HTTPS通信は中間者攻撃のリスク（証明書検証を無効化する場合）
+
+【対策】
+✅ tinyproxy のアクセス制御を設定
+   Allow 192.168.1.0/24  # 特定サブネットのみ許可
+
+✅ 使用後は必ずプロキシ設定をOFFにする
+✅ 本番環境では絶対に使用しない（開発専用）
+✅ 認証を追加（BasicAuth など）
+```
+
+**tinyproxy のアクセス制御設定例**
+
+```bash
+# /opt/homebrew/etc/tinyproxy/tinyproxy.conf
+
+Port 8888
+Listen 0.0.0.0
+
+# アクセス制御（特定のサブネットのみ許可）
+Allow 127.0.0.1
+Allow 192.168.1.0/24
+
+# 認証（オプション）
+BasicAuth user password
+
+# SOCKS上流設定
+Upstream socks5 localhost:1080
+
+# ログ
+LogFile "/var/log/tinyproxy/tinyproxy.log"
+LogLevel Info
+```
+
+---
+
+### 神テク⑩ sshuttle / ssh -w で「ほぼVPN」構成
+
+**用途**：サブネット全体をトンネル化し、すべてのツールが透過的に内部ネットワークにアクセス
+
+```mermaid
+graph TB
+    subgraph Local["開発者PC"]
+        Apps["すべてのアプリ<br/>(ブラウザ/CLI/IDE)"]
+        Sshuttle["sshuttle<br/>(透過的プロキシ)"]
+    end
+
+    subgraph Internet["インターネット"]
+        Tunnel["SSH Tunnel<br/>暗号化"]
+    end
+
+    subgraph Cloud["VPC / 社内ネットワーク"]
+        Bastion["踏み台サーバー"]
+        Subnet["内部サブネット<br/>10.0.1.0/24"]
+        API["API Server<br/>10.0.1.10"]
+        DB["Database<br/>10.0.1.20"]
+        Admin["Admin Panel<br/>10.0.1.30"]
+    end
+
+    Apps --> Sshuttle
+    Sshuttle -->|"ルーティングテーブル書き換え<br/>10.0.1.0/24 → sshuttle"| Tunnel
+    Tunnel --> Bastion
+    Bastion --> Subnet
+    Subnet --> API
+    Subnet --> DB
+    Subnet --> Admin
+
+    style Local fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    style Cloud fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    style Tunnel fill:#c8e6c9,stroke:#2e7d32,stroke-width:2px
+    style Sshuttle fill:#bbdefb,stroke:#1976d2,stroke-width:2px
+
+    rect rgb(232, 245, 233)
+        Note over Apps,Subnet: ✅ アプリ側で設定不要<br/>✅ サブネット全体が透過的にアクセス可能
+    end
+```
+
+**メリット**
+
+```
+✅ VPN不要で、サブネット単位でのルーティングが可能
+✅ プロキシ設定不要（透過的）
+✅ すべてのツールがそのまま動く（Docker, Git, npm, etc.）
+✅ 複数のサブネットを同時にルーティング可能
+✅ VPNより軽量で、SSH接続があればすぐに使える
+```
+
+**sshuttle のインストールと基本使用**
+
+```bash
+# インストール（macOS）
+brew install sshuttle
+
+# インストール（Ubuntu）
+sudo apt install sshuttle
+
+# 基本形：指定したサブネットをトンネル経由にする
+sshuttle -r user@bastion.example.com 10.0.1.0/24
+
+# 実行すると、10.0.1.0/24 へのすべての通信が自動的にトンネル経由になる
+
+# 確認
+ping 10.0.1.10
+curl http://10.0.1.20:3306
+mysql -h 10.0.1.20 -u admin -p
+```
+
+**複数サブネットのルーティング**
+
+```bash
+# 複数のサブネットを同時にルーティング
+sshuttle -r user@bastion.example.com 10.0.1.0/24 10.0.2.0/24 172.16.0.0/16
+
+# すべてのプライベートIPをルーティング
+sshuttle -r user@bastion.example.com 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16
+
+# DNS解決もトンネル経由にする
+sshuttle -r user@bastion.example.com --dns 10.0.1.0/24
+```
+
+**バックグラウンドで実行**
+
+```bash
+# デーモンモードで実行
+sshuttle -r user@bastion.example.com 10.0.1.0/24 --daemon --pidfile=/tmp/sshuttle.pid
+
+# 停止
+kill $(cat /tmp/sshuttle.pid)
+
+# または
+pkill sshuttle
+```
+
+**実案件での使用例**
+
+```
+【状況】
+- AWSのVPC内に複数のサービスが稼働
+- プライベートサブネット: 10.0.1.0/24
+- 開発者がローカルから直接アクセスしたい
+- VPN構築は時間がかかる
+
+【構成】
+開発者PC → sshuttle → 踏み台サーバー → VPC内リソース
+
+【メリット】
+- 5分でセットアップ完了
+- すべてのツールが透過的に動作
+- VPNのような複雑な設定不要
+
+【使用例】
+# sshuttle起動
+sshuttle -r ec2-user@bastion.aws 10.0.1.0/24 --dns
+
+# あとは普通に使う
+mysql -h 10.0.1.20 -u admin -p mydb
+curl http://10.0.1.30/api/health
+ssh admin@10.0.1.40
+```
+
+**ssh -w（tun/tap）による真のVPN構成**
+
+```bash
+# より低レベルなVPN構成（上級者向け）
+# 踏み台サーバーで tun デバイスを有効化する必要がある
+
+# /etc/ssh/sshd_config（踏み台サーバー）
+PermitTunnel yes
+
+# ローカルでVPNトンネルを作成
+sudo ssh -w 0:0 root@bastion.example.com
+
+# インターフェースにIPを設定
+# ローカル
+sudo ifconfig tun0 10.1.0.1 pointopoint 10.1.0.2 netmask 255.255.255.0
+
+# リモート（踏み台）
+sudo ifconfig tun0 10.1.0.2 pointopoint 10.1.0.1 netmask 255.255.255.0
+
+# ルーティング追加
+sudo route add -net 10.0.1.0/24 10.1.0.2
+```
+
+**sshuttle と ssh -w の比較**
+
+| 項目 | sshuttle | ssh -w (tun/tap) |
+|------|---------|------------------|
+| **セットアップ** | ◎ 簡単 | △ 複雑（root権限必要） |
+| **透過性** | ○ iptables で透過的 | ◎ 完全なL3トンネル |
+| **パフォーマンス** | ○ 良好 | ◎ より高速 |
+| **サブネット** | ◎ 複数指定可能 | ○ 手動設定 |
+| **おすすめ度** | ◎ 開発用途に最適 | △ インフラ検証向け |
+
+**セキュリティ担当への説明文**
+
+```
+sshuttle は以下の理由で管理可能です：
+
+✅ SSH接続ベース
+   - 既存のSSH認証・認可が適用される
+   - 公開鍵認証、多要素認証が使える
+
+✅ 一時的な使用
+   - プロセスを終了すればルーティングは元に戻る
+   - 常時接続のVPNより管理しやすい
+
+✅ 監査可能
+   - SSHログで接続履歴を追跡
+   - どのサブネットにアクセスしたか記録可能
+
+⚠️ 注意点
+   - ルーティングテーブルを書き換えるため、管理者権限が必要
+   - 使用後は必ず終了する運用ルールを設ける
+```
+
+---
+
+### 神テク⑪ code-server × SSHトンネルでブラウザVSCodeをセキュアに開く
+
+**用途**：リモート環境に直接アクセスせず、ブラウザでVSCodeを使って開発
+
+```mermaid
+graph LR
+    subgraph Local["開発者PC"]
+        Browser["ブラウザ<br/>(Chrome/Firefox)"]
+    end
+
+    subgraph Internet["インターネット"]
+        Tunnel["SSH Tunnel<br/>暗号化"]
+    end
+
+    subgraph Cloud["クラウド / 社内サーバー"]
+        Bastion["踏み台サーバー"]
+        DevServer["開発サーバー<br/>(code-server起動)"]
+        CodeServer["code-server<br/>localhost:8080"]
+        Files["プロジェクトファイル<br/>/home/user/project"]
+    end
+
+    Browser -->|"http://localhost:8080"| Tunnel
+    Tunnel -->|"ssh -L 8080:localhost:8080"| Bastion
+    Bastion --> DevServer
+    DevServer --> CodeServer
+    CodeServer --> Files
+
+    style Local fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    style Cloud fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    style Tunnel fill:#c8e6c9,stroke:#2e7d32,stroke-width:2px
+    style Browser fill:#bbdefb,stroke:#1976d2
+    style CodeServer fill:#ffecb3,stroke:#f57c00
+```
+
+**メリット**
+
+```
+✅ ローカルマシンのスペック不足を解消（リモートのCPU/メモリを使用）
+✅ チーム全員が同じ開発環境を使える
+✅ ブラウザだけでコーディング可能（iPad / Chromebook でも開発可能）
+✅ SSH経由なので通信は暗号化
+✅ Grafana / Kibana などの管理画面にも応用可能
+```
+
+**code-server のセットアップ**
+
+```bash
+# リモートサーバーで code-server をインストール
+curl -fsSL https://code-server.dev/install.sh | sh
+
+# 起動（初回は設定ファイルが生成される）
+code-server
+
+# ~/.config/code-server/config.yaml を編集
+bind-addr: 127.0.0.1:8080  # localhostに限定（重要）
+auth: password
+password: your-secure-password  # 強固なパスワードを設定
+cert: false  # SSHトンネル経由なので証明書不要
+
+# 再起動
+code-server
+
+# systemd で自動起動（オプション）
+sudo systemctl enable --now code-server@$USER
+```
+
+**SSHポートフォワードで接続**
+
+```bash
+# ローカルPCから
+ssh -L 8080:localhost:8080 user@dev-server.example.com
+
+# ブラウザで開く
+http://localhost:8080
+
+# パスワード入力 → VSCodeがブラウザで起動！
+```
+
+**ProxyJump を使った多段接続**
+
+```bash
+# 踏み台経由で開発サーバーに接続
+ssh -L 8080:localhost:8080 -J bastion@bastion.example.com user@dev-server.internal
+
+# ~/.ssh/config に設定
+Host dev-server
+    HostName dev-server.internal
+    User user
+    ProxyJump bastion@bastion.example.com
+    LocalForward 8080 localhost:8080
+
+# 設定後は
+ssh dev-server
+# で自動的にポートフォワードも設定される
+```
+
+**実案件での使用例**
+
+```
+【状況】
+- 本番環境のトラブルシューティング
+- 開発サーバーのログ解析・コード修正
+- ローカルマシンはMacBook Air（非力）
+- リモートサーバーは32コア128GBメモリ
+
+【構成】
+ローカルPC → SSHトンネル → 踏み台 → 開発サーバー（code-server）
+
+【メリット】
+- ブラウザだけで高速な開発環境を利用
+- 大規模プロジェクトのビルドもリモートで実行
+- iPad からでも緊急対応可能
+```
+
+**Grafana / Kibana など管理画面への応用**
+
+```bash
+# Grafana（デフォルトポート3000）をトンネル経由で開く
+ssh -L 3000:localhost:3000 monitoring@monitoring-server.internal
+
+# ブラウザで http://localhost:3000
+
+# Kibana（デフォルトポート5601）
+ssh -L 5601:localhost:5601 elk@elk-server.internal
+
+# ブラウザで http://localhost:5601
+
+# Jupyterサーバー（ポート8888）
+ssh -L 8888:localhost:8888 data-scientist@jupyter-server.internal
+
+# ブラウザで http://localhost:8888
+```
+
+**複数の管理画面を同時に開く**
+
+```bash
+# 1つのSSH接続で複数ポートをフォワード
+ssh -L 3000:localhost:3000 \
+    -L 5601:localhost:5601 \
+    -L 8080:localhost:8080 \
+    admin@admin-server.internal
+
+# これで以下が同時にアクセス可能：
+# - http://localhost:3000 → Grafana
+# - http://localhost:5601 → Kibana
+# - http://localhost:8080 → code-server
+```
+
+**autossh で常時接続を維持**
+
+```bash
+# autossh で自動再接続
+autossh -M 0 -f -N \
+    -o "ServerAliveInterval 30" \
+    -o "ServerAliveCountMax 3" \
+    -L 8080:localhost:8080 \
+    user@dev-server.example.com
+
+# バックグラウンドで常時トンネルを維持
+# 切断されても自動で再接続
+```
+
+**DevOps運用改善ポイント**
+
+```
+【従来の課題】
+❌ 管理画面にアクセスするためにVPN接続が必要
+❌ 各メンバーのIPをセキュリティグループに追加する手間
+❌ IPアドレス変更時の対応が面倒
+
+【SSHトンネル × code-server の利点】
+✅ SSH接続できればすべての管理画面にアクセス可能
+✅ セキュリティグループは踏み台の22番ポートだけ
+✅ IAM認証（AWS SSM / GCP IAP）と組み合わせれば最強
+✅ 接続履歴がSSHログに残る
+```
+
+**セキュリティ担当への説明文**
+
+```
+code-server × SSHトンネルは以下の理由で安全です：
+
+✅ 外部公開しない
+   - code-serverは localhost:8080 でのみリッスン
+   - 外部からの直接アクセス不可
+
+✅ 認証の多層化
+   - SSH公開鍵認証
+   - code-serverのパスワード認証
+   - 必要に応じて2FA
+
+✅ 通信の暗号化
+   - SSH経由のため、すべての通信が暗号化
+
+✅ 監査可能
+   - SSHログで接続履歴を追跡
+   - code-serverのアクセスログも記録
+```
+
+**systemd でcode-serverを自動起動**
+
+```bash
+# /etc/systemd/system/code-server@.service
+[Unit]
+Description=code-server
+After=network.target
+
+[Service]
+Type=simple
+User=%i
+ExecStart=/usr/bin/code-server
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+
+# 有効化
+sudo systemctl enable --now code-server@username
+
+# 状態確認
+sudo systemctl status code-server@username
+```
+
+---
+
 ## 「APIを作る vs トンネル」の判断基準
 
 ```mermaid
@@ -1056,6 +1809,235 @@ graph TB
 
 ---
 
+## 導入判断ポイント：どの神テクを選ぶべきか
+
+```mermaid
+flowchart TD
+    START[SSHトンネルが必要] --> Q1{目的は何？}
+
+    Q1 -->|"DB接続・管理画面アクセス"| Q2{一時的？継続的？}
+    Q1 -->|"開発サーバーの実機確認"| TECH8["神テク⑧<br/>BrowserSync/Vite"]
+    Q1 -->|"スマホアプリ開発"| TECH9["神テク⑨<br/>SOCKS + HTTPプロキシ"]
+    Q1 -->|"サブネット全体にアクセス"| TECH10["神テク⑩<br/>sshuttle"]
+    Q1 -->|"リモート開発環境"| TECH11["神テク⑪<br/>code-server"]
+
+    Q2 -->|"一時的"| Q3{接続先は1つ？複数？}
+    Q2 -->|"継続的"| Q4{自動化が必要？}
+
+    Q3 -->|"1つ"| TECH1["神テク①<br/>ローカルポートフォワード"]
+    Q3 -->|"複数"| TECH3["神テク③<br/>SOCKS動的フォワード"]
+
+    Q4 -->|"Yes (cron/バッチ)"| TECH5["神テク⑤<br/>cron/バッチ"]
+    Q4 -->|"No (手動)"| TECH1
+
+    style TECH1 fill:#e3f2fd,stroke:#1976d2
+    style TECH3 fill:#fff3e0,stroke:#f57c00
+    style TECH5 fill:#e8f5e9,stroke:#4caf50
+    style TECH8 fill:#fce4ec,stroke:#c2185b
+    style TECH9 fill:#f3e5f5,stroke:#7b1fa2
+    style TECH10 fill:#e0f2f1,stroke:#00796b
+    style TECH11 fill:#fff9c4,stroke:#f57f17
+```
+
+### 📋 神テク別 導入判断チェックリスト
+
+#### 神テク① ローカルポートフォワード
+
+```
+こんな時に使う：
+✅ 内部DBに一時的にアクセスしたい
+✅ 管理画面を手元のブラウザで開きたい
+✅ MySQL Workbench / pgAdmin など既存ツールを使いたい
+✅ 接続先が明確（特定のホスト:ポート）
+
+避けるべき時：
+❌ 複数のサーバーに同時アクセスが必要
+❌ 常時接続が必要（→ 神テク⑤またはautossh）
+❌ チーム全員が使う恒久的な仕組み（→ API検討）
+```
+
+#### 神テク② リモートポートフォワード
+
+```
+こんな時に使う：
+✅ NAT内のローカル開発サーバーを外部から確認したい
+✅ Webhook受信のテストをしたい
+✅ CI/CDから開発環境にアクセスさせたい
+
+避けるべき時：
+❌ 本番環境での使用
+❌ セキュリティポリシーが厳しい環境
+❌ 外部公開が必要（→ ngrok等の専用サービス検討）
+```
+
+#### 神テク③ SOCKS動的ポートフォワード
+
+```
+こんな時に使う：
+✅ 複数の内部サーバーに調査・デバッグでアクセス
+✅ ブラウザで複数の管理画面を開く
+✅ CLI/Git/npm など様々なツールを使う
+
+避けるべき時：
+❌ 接続先が1つだけ（→ 神テク①の方が軽量）
+❌ スマホから接続したい（→ 神テク⑨）
+```
+
+#### 神テク④ Bastion + 多段トンネル
+
+```
+こんな時に使う：
+✅ 踏み台経由でしか内部サーバーにアクセスできない
+✅ 多段構成が必須の環境
+
+避けるべき時：
+❌ 3段以上の多段（設計を見直す）
+❌ 複雑化しすぎている（VPN検討）
+```
+
+#### 神テク⑤ cron/バッチ
+
+```
+こんな時に使う：
+✅ 定期的なバックアップ取得
+✅ データ同期ジョブ
+✅ 夜間バッチでの内部DB接続
+
+避けるべき時：
+❌ リアルタイム性が必要
+❌ 高頻度実行（負荷が高い）
+```
+
+#### 神テク⑥ ログ取得
+
+```
+こんな時に使う：
+✅ リモートサーバーのログを手元で確認
+✅ Docker Logs / journalctl の取得
+✅ 障害対応時の緊急調査
+
+避けるべき時：
+❌ 恒久的なログ収集（→ Fluentd/Logstash検討）
+❌ リアルタイム監視（→ Grafana/Kibana検討）
+```
+
+#### 神テク⑦ クラウド連携 (AWS/GCP)
+
+```
+こんな時に使う：
+✅ AWS/GCPのプライベートリソースにアクセス
+✅ セキュリティグループを最小化したい
+✅ IAM認証で統一したい
+
+避けるべき時：
+❌ オンプレミス環境（→ 他の神テク）
+❌ クラウドのIAM機能を使えない
+```
+
+#### 神テク⑧ BrowserSync/Vite × SSHトンネル
+
+```
+こんな時に使う：
+✅ レスポンシブ対応の実機確認
+✅ iPhone/Android実機でのプレビュー
+✅ チームメンバーへのデモ
+
+避けるべき時：
+❌ 本番環境での使用
+❌ 外部クライアントへのデモ（→ 専用のステージング環境）
+```
+
+#### 神テク⑨ SOCKS + HTTPプロキシでスマホトンネル化
+
+```
+こんな時に使う：
+✅ スマホアプリ開発で内部APIにアクセス
+✅ Charles Proxyと併用したデバッグ
+✅ VPN不要で手軽にテストしたい
+
+避けるべき時：
+❌ 本番環境での使用
+❌ セキュリティ担当の承認がない
+❌ 複数人で常時使う（→ VPN検討）
+```
+
+#### 神テク⑩ sshuttle (ほぼVPN)
+
+```
+こんな時に使う：
+✅ サブネット全体に透過的にアクセスしたい
+✅ すべてのツールをそのまま使いたい
+✅ VPN構築の時間がない
+
+避けるべき時：
+❌ root権限が取得できない環境
+❌ 常時接続が必要（→ 正式なVPN検討）
+❌ 複数人で共有する恒久的な仕組み
+```
+
+#### 神テク⑪ code-server × SSHトンネル
+
+```
+こんな時に使う：
+✅ ローカルマシンのスペックが不足
+✅ チーム全員で同じ開発環境を使いたい
+✅ iPadなどからでも開発したい
+✅ Grafana/Kibanaなど管理画面へのアクセス
+
+避けるべき時：
+❌ ローカル開発で十分な場合
+❌ セキュリティ要件が非常に厳しい
+```
+
+### 🔍 セキュリティ担当への説明ポイント
+
+どの神テクを選んでも、以下を押さえれば説明が通りやすい：
+
+```
+1. 外部公開しない設計
+   - localhostに限定（GatewayPorts no）
+   - 内部ネットワークからのみアクセス可能
+
+2. 通信の暗号化
+   - すべてSSH経由で暗号化される
+
+3. 認証・認可
+   - SSH公開鍵認証
+   - 必要に応じて2FA
+   - IAM認証（AWS/GCP）
+
+4. 監査ログ
+   - SSHログで「誰がいつ接続したか」追跡可能
+   - アプリケーションログも併用
+
+5. 一時的な使用
+   - 開発・デバッグ時のみ
+   - 使用後は必ずトンネルを閉じる
+
+6. 段階的改善のロードマップ
+   - Phase 0: トンネルで突破
+   - Phase 1: 権限制御・監査ログ
+   - Phase 2: API化 or VPN構築
+```
+
+### ⚖️ 比較表：どれを使うべきか
+
+| 神テク | セットアップ | 柔軟性 | セキュリティ | 恒久利用 | おすすめ度 |
+|--------|-------------|--------|-------------|---------|-----------|
+| ① ローカルフォワード | ◎ 簡単 | △ 単一接続 | ○ 安全 | △ 要検討 | ◎ 基本 |
+| ② リモートフォワード | ○ 簡単 | △ 単一接続 | △ 要注意 | × 一時のみ | ○ 限定的 |
+| ③ SOCKS | ◎ 簡単 | ◎ 複数対応 | ○ 安全 | ○ 可能 | ◎ 便利 |
+| ④ 多段トンネル | ○ やや複雑 | ○ 必要時のみ | ○ 安全 | ○ 可能 | ○ 必須時 |
+| ⑤ cron/バッチ | △ スクリプト必要 | △ 自動化特化 | ○ 安全 | ◎ 最適 | ○ 自動化向け |
+| ⑥ ログ取得 | ○ 簡単 | △ ログ特化 | ○ 安全 | △ 要検討 | ○ 障害対応 |
+| ⑦ クラウド連携 | ○ やや複雑 | ◎ クラウドネイティブ | ◎ IAM認証 | ◎ 最適 | ◎ クラウド環境 |
+| ⑧ BrowserSync/Vite | ○ 簡単 | △ 開発特化 | ○ 安全 | × 開発のみ | ◎ フロント開発 |
+| ⑨ スマホプロキシ | △ やや複雑 | ○ モバイル開発 | △ 要注意 | × 開発のみ | ○ アプリ開発 |
+| ⑩ sshuttle | ○ 簡単 | ◎ サブネット全体 | ○ 安全 | △ 要検討 | ◎ 透過的アクセス |
+| ⑪ code-server | △ セットアップ必要 | ◎ リモート開発 | ○ 安全 | ○ 可能 | ◎ リモート環境 |
+
+---
+
 ## まとめ
 
 ### トンネルは「逃げ」ではなく「現実解」
@@ -1064,7 +2046,9 @@ graph TB
 - 正しく制御すれば、監査・セキュリティ要件も満たせる
 - 「最小構成」でも、押さえるべきポイントを押さえれば、後から怒られない
 
-### 7つの神テクニック
+### 11の神テクニック
+
+**基本テクニック（①〜⑦）**
 
 1. **ローカルポートフォワード**：閉域DB・管理画面への接続
 2. **リモートポートフォワード**：NAT内サービスの一時公開
@@ -1073,6 +2057,13 @@ graph TB
 5. **cron / バッチ連携**：定期ジョブでの活用
 6. **ログ取得**：ForceCommandと組み合わせた安全運用
 7. **クラウド連携**：IAP / Session Manager でセキュリティグループ最小化
+
+**実践テクニック（⑧〜⑪）**
+
+8. **BrowserSync / Vite × SSHトンネル**：実機ライブプレビュー（HMR対応）
+9. **SOCKS + HTTPプロキシ**：スマホアプリ開発での内部API接続
+10. **sshuttle（ほぼVPN）**：サブネット全体を透過的にトンネル化
+11. **code-server × SSHトンネル**：ブラウザVSCodeでリモート開発
 
 ### 判断基準を持つ
 
