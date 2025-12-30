@@ -677,10 +677,6 @@ graph TB
     style EC2 fill:#ffecb3,stroke:#ff9900
     style GCE fill:#c8e6c9,stroke:#4285f4
     style RDS fill:#ffe0b2,stroke:#ff9900
-
-    rect rgb(232, 245, 233)
-        Note over SSM,IAP: ✅ セキュリティグループで22番ポートを開放不要<br/>✅ IAM認証で制御<br/>✅ 監査ログ自動取得
-    end
 ```
 
 **AWS EC2：Session Manager + ポートフォワード**
@@ -1127,10 +1123,6 @@ graph TB
     style Cloud fill:#fff3e0,stroke:#f57c00,stroke-width:2px
     style Tunnel fill:#c8e6c9,stroke:#2e7d32,stroke-width:2px
     style Sshuttle fill:#bbdefb,stroke:#1976d2,stroke-width:2px
-
-    rect rgb(232, 245, 233)
-        Note over Apps,Subnet: ✅ アプリ側で設定不要<br/>✅ サブネット全体が透過的にアクセス可能
-    end
 ```
 
 **メリット**
