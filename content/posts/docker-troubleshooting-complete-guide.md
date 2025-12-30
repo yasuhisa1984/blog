@@ -24,13 +24,24 @@ cover:
 
 ## 障害調査の基本フロー
 
-```
-1. 状態確認    → コンテナは動いているか？
-2. ログ確認    → 何が出力されているか？
-3. リソース確認 → CPU/メモリ/ディスクは足りているか？
-4. ネットワーク → 通信できているか？
-5. 設定確認    → 環境変数、マウント、ポートは正しいか？
-6. コンテナ内調査 → 中に入って確認
+```mermaid
+flowchart TB
+    Start["🔍 障害発生"] --> Step1["1️⃣ 状態確認<br/>コンテナは動いているか？<br/><code>docker ps -a</code>"]
+    Step1 --> Step2["2️⃣ ログ確認<br/>何が出力されているか？<br/><code>docker logs</code>"]
+    Step2 --> Step3["3️⃣ リソース確認<br/>CPU/メモリ/ディスクは足りているか？<br/><code>docker stats</code>"]
+    Step3 --> Step4["4️⃣ ネットワーク確認<br/>通信できているか？<br/><code>docker network inspect</code>"]
+    Step4 --> Step5["5️⃣ 設定確認<br/>環境変数、マウント、ポートは正しいか？<br/><code>docker inspect</code>"]
+    Step5 --> Step6["6️⃣ コンテナ内調査<br/>中に入って確認<br/><code>docker exec</code>"]
+    Step6 --> Resolve["✅ 問題解決"]
+
+    style Start fill:#ffebee
+    style Resolve fill:#e8f5e9
+    style Step1 fill:#e3f2fd
+    style Step2 fill:#e3f2fd
+    style Step3 fill:#e3f2fd
+    style Step4 fill:#e3f2fd
+    style Step5 fill:#e3f2fd
+    style Step6 fill:#e3f2fd
 ```
 
 ---
@@ -76,6 +87,39 @@ ghi789         redis:7        "docker-entrypoint.s…"   Up 2 hours             
 | `Restarting` | 再起動ループ | ログとヘルスチェック確認 |
 | `Created` | 作成のみ（起動していない） | docker start が必要 |
 | `Dead` | 削除に失敗 | docker rm -f で強制削除 |
+
+### STATUS別の調査フロー
+
+```mermaid
+flowchart TB
+    Start["docker ps -a で STATUS 確認"] --> Check{STATUS は？}
+
+    Check -->|"Up X hours/minutes"| Healthy["✅ 正常稼働中<br/>パフォーマンス監視へ"]
+    Check -->|"Exited (0)"| Exit0["🔍 正常終了<br/>意図した終了か確認"]
+    Check -->|"Exited (1)"| Exit1["🔴 エラー終了<br/>docker logs で原因調査"]
+    Check -->|"Exited (137)"| Exit137["💥 OOMKilled<br/>メモリ不足調査<br/>docker stats / inspect"]
+    Check -->|"Exited (143)"| Exit143["🛑 SIGTERM<br/>docker stop された<br/>正常停止"]
+    Check -->|Restarting| Restarting["🔄 再起動ループ<br/>1. docker logs<br/>2. ヘルスチェック確認<br/>3. restart policy 確認"]
+    Check -->|Created| Created["📦 未起動<br/>docker start [container]"]
+    Check -->|Dead| Dead["⚠️ 削除失敗<br/>docker rm -f [container]"]
+
+    Exit0 --> End
+    Exit1 --> Logs["docker logs -f [container]"]
+    Exit137 --> Memory["docker stats<br/>docker inspect --format='{{.HostConfig.Memory}}'"]
+    Exit143 --> End
+    Restarting --> Logs
+    Created --> Start2["コンテナ起動"]
+    Dead --> Remove["強制削除"]
+
+    style Healthy fill:#e8f5e9
+    style Exit0 fill:#e3f2fd
+    style Exit1 fill:#ffebee
+    style Exit137 fill:#ffebee
+    style Exit143 fill:#fff3e0
+    style Restarting fill:#fff3e0
+    style Created fill:#e3f2fd
+    style Dead fill:#ffebee
+```
 
 ## 終了コードの意味
 
@@ -195,6 +239,48 @@ docker inspect --format='{{.HostConfig.LogConfig.Type}}' [container]
 
 **注意:** syslog、fluentd等を使っている場合、`docker logs` は使えません。
 
+### ログドライバー別の調査方法
+
+```mermaid
+flowchart TB
+    Start["ログドライバー確認<br/><code>docker inspect --format='{{.HostConfig.LogConfig.Type}}'</code>"] --> Check{ログドライバーは？}
+
+    Check -->|json-file| JsonFile["📄 json-file<br/>デフォルト"]
+    Check -->|local| Local["📄 local<br/>最適化版"]
+    Check -->|syslog| Syslog["🌐 syslog"]
+    Check -->|journald| Journald["🌐 journald"]
+    Check -->|fluentd| Fluentd["🌐 fluentd"]
+    Check -->|awslogs| Awslogs["☁️ awslogs"]
+
+    JsonFile --> DockerLogs1["✅ docker logs 使用可<br/><code>docker logs -f [container]</code>"]
+    Local --> DockerLogs2["✅ docker logs 使用可<br/><code>docker logs -f [container]</code>"]
+
+    Syslog --> External1["❌ docker logs 不可<br/>📋 代替手段：<br/><code>journalctl -u docker</code><br/><code>tail -f /var/log/syslog</code>"]
+    Journald --> External2["❌ docker logs 不可<br/>📋 代替手段：<br/><code>journalctl CONTAINER_NAME=[name]</code>"]
+    Fluentd --> External3["❌ docker logs 不可<br/>📋 代替手段：<br/>Fluentdの出力先を確認<br/>（Elasticsearch, S3等）"]
+    Awslogs --> External4["❌ docker logs 不可<br/>📋 代替手段：<br/>AWS CloudWatch Logsで確認<br/><code>aws logs tail /aws/ecs/[name]</code>"]
+
+    DockerLogs1 --> End["✅ ログ取得完了"]
+    DockerLogs2 --> End
+    External1 --> End
+    External2 --> End
+    External3 --> End
+    External4 --> End
+
+    style JsonFile fill:#e8f5e9
+    style Local fill:#e8f5e9
+    style DockerLogs1 fill:#e3f2fd
+    style DockerLogs2 fill:#e3f2fd
+    style Syslog fill:#fff3e0
+    style Journald fill:#fff3e0
+    style Fluentd fill:#fff3e0
+    style Awslogs fill:#e1f5fe
+    style External1 fill:#fff3e0
+    style External2 fill:#fff3e0
+    style External3 fill:#fff3e0
+    style External4 fill:#e1f5fe
+```
+
 ## ログファイルの直接確認
 
 ```bash
@@ -228,6 +314,86 @@ du -sh /var/lib/docker/containers/*/*.log | sort -h
 # 設定を反映
 systemctl restart docker
 ```
+
+---
+
+## 調査手法の選択：Docker環境に入る vs ローカルからログ取得
+
+障害調査時に「コンテナ内に入るべきか」「ホストからログを取得すべきか」を適切に判断することは重要です。
+
+```mermaid
+flowchart TB
+    Start["🔍 調査開始"] --> Q1{"コンテナは<br/>Running状態？"}
+
+    Q1 -->|Yes| Q2{"何を調べる？"}
+    Q1 -->|No| HostLogs["📋 ホストから調査<br/><code>docker logs</code><br/><code>docker inspect</code>"]
+
+    Q2 -->|ログ| Q3{"ログドライバーは？"}
+    Q2 -->|プロセス状態| ExecShell["🖥️ コンテナ内調査<br/><code>docker exec -it [container] /bin/sh</code>"]
+    Q2 -->|ファイル内容| ExecOrCp["🖥️ コンテナ内調査 or<br/>📦 ファイルコピー<br/><code>docker cp [container]:/path .</code>"]
+    Q2 -->|設定値| HostInspect["📋 ホストから調査<br/><code>docker inspect</code>"]
+
+    Q3 -->|json-file| HostLogs
+    Q3 -->|syslog/fluentd| ExternalLogs["🌐 外部ログシステムで確認<br/>（Splunk, CloudWatch, etc.）"]
+
+    HostLogs --> End["✅ 調査完了"]
+    ExecShell --> End
+    ExecOrCp --> End
+    HostInspect --> End
+    ExternalLogs --> End
+
+    style Start fill:#e3f2fd
+    style End fill:#e8f5e9
+    style ExecShell fill:#fff3e0
+    style ExecOrCp fill:#fff3e0
+    style HostLogs fill:#e3f2fd
+    style HostInspect fill:#e3f2fd
+    style ExternalLogs fill:#f3e5f5
+```
+
+### 判断基準
+
+#### ホストから調査すべきケース
+
+1. **コンテナが停止している**
+   - `docker logs [container]` で最後の出力を確認
+   - `docker inspect [container]` でExitCodeを確認
+
+2. **ログを確認したい（json-fileドライバー）**
+   - `docker logs -f [container]` でリアルタイム監視
+   - 過去のログも簡単に参照可能
+
+3. **設定値を確認したい**
+   - 環境変数、マウント、ポート設定は `docker inspect` で十分
+
+4. **セキュリティ上コンテナに入れない**
+   - 本番環境で直接execできない場合
+   - `docker cp` でファイルをコピーして調査
+
+#### コンテナ内に入るべきケース
+
+1. **プロセスの動作を調べたい**
+   ```bash
+   docker exec -it [container] /bin/sh
+   ps aux | grep [process]
+   top -b -n 1
+   ```
+
+2. **ファイルシステムの状態を確認**
+   ```bash
+   docker exec [container] ls -lah /var/log
+   docker exec [container] df -h
+   docker exec [container] cat /etc/config.conf
+   ```
+
+3. **デバッグコマンドを実行**
+   ```bash
+   docker exec [container] curl localhost:8080/health
+   docker exec [container] netstat -tuln
+   ```
+
+4. **ログファイルが複数ある**
+   - stdoutだけでなく、アプリケーションが独自にログファイルを生成している場合
 
 ---
 
@@ -284,6 +450,37 @@ docker exec [container] cat /sys/fs/cgroup/memory/memory.oom_control
 ```
 
 ## メモリ不足（OOMKilled）の調査
+
+```mermaid
+flowchart TB
+    Start["コンテナがExited (137)"] --> Check1["🔍 OOMKilled確認<br/><code>docker inspect --format='{{.State.OOMKilled}}'</code>"]
+
+    Check1 -->|true| OOM["💥 OOMKilledを検出"]
+    Check1 -->|false| Other["他の原因でSIGKILL"]
+
+    OOM --> Step1["1️⃣ メモリ制限確認<br/><code>docker inspect --format='{{.HostConfig.Memory}}'</code>"]
+    Step1 --> Step2["2️⃣ 実際の使用量確認<br/><code>docker stats --no-stream</code>"]
+    Step2 --> Step3["3️⃣ システムログ確認<br/><code>dmesg | grep -i oom</code><br/><code>journalctl -k | grep -i killed</code>"]
+    Step3 --> Step4["4️⃣ ホストメモリ確認<br/><code>free -h</code>"]
+
+    Step4 --> Analysis{原因は？}
+
+    Analysis -->|"制限が低すぎる"| Fix1["✅ メモリ制限を増やす<br/><code>docker run --memory=2g</code><br/>または<br/><code>docker-compose.yml</code>で<br/>mem_limit: 2g"]
+    Analysis -->|"メモリリークの可能性"| Fix2["🔍 アプリケーション調査<br/>・ヒープダンプ取得<br/>・プロファイリング<br/>・ログ解析"]
+    Analysis -->|"ホストメモリ不足"| Fix3["⚠️ ホストリソース増強<br/>・不要コンテナ削除<br/>・スワップ設定<br/>・インスタンスサイズアップ"]
+
+    Fix1 --> Restart["🔄 コンテナ再起動"]
+    Fix2 --> Restart
+    Fix3 --> Restart
+
+    style Start fill:#ffebee
+    style OOM fill:#ffebee
+    style Other fill:#fff3e0
+    style Fix1 fill:#e8f5e9
+    style Fix2 fill:#e3f2fd
+    style Fix3 fill:#fff3e0
+    style Restart fill:#e8f5e9
+```
 
 ```bash
 # システムログでOOMを確認
@@ -363,6 +560,58 @@ docker port [container]
 ```
 
 ## コンテナ間の疎通確認
+
+### ネットワーク疎通調査フロー
+
+```mermaid
+flowchart TB
+    Start["🔍 ネットワーク疎通問題"] --> Step1["1️⃣ ネットワーク設定確認<br/><code>docker network inspect [network]</code><br/><code>docker inspect [container]</code>"]
+
+    Step1 --> Q1{同じネットワーク？}
+
+    Q1 -->|No| Fix1["❌ 異なるネットワーク<br/>✅ 同じネットワークに接続<br/><code>docker network connect [network] [container]</code>"]
+    Q1 -->|Yes| Step2["2️⃣ DNS解決確認<br/><code>docker exec [A] nslookup [B]</code>"]
+
+    Step2 --> Q2{名前解決できる？}
+
+    Q2 -->|No| Fix2["❌ DNS問題<br/>✅ 確認：<br/>・/etc/resolv.conf<br/>・Docker内蔵DNS (127.0.0.11)<br/>・ネットワークモード"]
+    Q2 -->|Yes| Step3["3️⃣ ICMP疎通確認<br/><code>docker exec [A] ping [B]</code>"]
+
+    Step3 --> Q3{Ping通る？}
+
+    Q3 -->|No| Fix3["❌ ネットワーク到達性問題<br/>✅ 確認：<br/>・ファイアウォール<br/>・ルーティング<br/>・ネットワークモード"]
+    Q3 -->|Yes| Step4["4️⃣ ポート疎通確認<br/><code>docker exec [B] ss -tlnp</code><br/><code>docker exec [A] telnet [B] [port]</code>"]
+
+    Step4 --> Q4{ポート開いてる？}
+
+    Q4 -->|No| Fix4["❌ ポートが開いていない<br/>✅ 確認：<br/>・アプリ起動状況<br/>・LISTEN状態<br/>・バインドアドレス (0.0.0.0 vs 127.0.0.1)"]
+    Q4 -->|Yes| Step5["5️⃣ アプリ疎通確認<br/><code>docker exec [A] curl -v http://[B]:[port]/health</code>"]
+
+    Step5 --> Q5{HTTP応答OK？}
+
+    Q5 -->|No| Fix5["❌ アプリケーション問題<br/>✅ 確認：<br/>・アプリログ<br/>・ヘルスチェック<br/>・認証/認可"]
+    Q5 -->|Yes| Success["✅ 疎通成功"]
+
+    Fix1 --> Retry["🔄 再テスト"]
+    Fix2 --> Retry
+    Fix3 --> Retry
+    Fix4 --> Retry
+    Fix5 --> Retry
+    Retry --> Step1
+
+    style Start fill:#ffebee
+    style Success fill:#e8f5e9
+    style Fix1 fill:#fff3e0
+    style Fix2 fill:#fff3e0
+    style Fix3 fill:#fff3e0
+    style Fix4 fill:#fff3e0
+    style Fix5 fill:#fff3e0
+    style Step1 fill:#e3f2fd
+    style Step2 fill:#e3f2fd
+    style Step3 fill:#e3f2fd
+    style Step4 fill:#e3f2fd
+    style Step5 fill:#e3f2fd
+```
 
 ```bash
 # コンテナAからコンテナBへping
@@ -665,6 +914,58 @@ docker run --rm -v [volume-name]:/data alpine du -sh /data
 ```bash
 docker ps -a
 # STATUS: Exited (1) ...
+```
+
+### 起動失敗調査フロー
+
+```mermaid
+flowchart TB
+    Start["コンテナがExitedで停止"] --> Step1["1️⃣ ログ確認<br/><code>docker logs [container]</code>"]
+
+    Step1 --> Step2["2️⃣ 終了コード確認<br/><code>docker inspect --format='{{.State.ExitCode}}'</code>"]
+
+    Step2 --> Check{終了コードは？}
+
+    Check -->|127| Error127["❌ コマンドが見つからない<br/>✅ 確認：<br/>・ENTRYPOINTのパス<br/>・CMDのスペル<br/>・実行ファイルの存在"]
+    Check -->|126| Error126["❌ 権限がない<br/>✅ 確認：<br/>・chmod +x<br/>・ファイル所有者<br/>・実行権限"]
+    Check -->|1| Error1["❌ アプリケーションエラー<br/>次のステップへ"]
+    Check -->|その他| ErrorOther["❌ その他のエラー<br/>シグナル確認"]
+
+    Error1 --> Step3["3️⃣ コマンド/ENTRYPOINT確認<br/><code>docker inspect --format='{{.Config.Cmd}}'</code><br/><code>docker inspect --format='{{.Config.Entrypoint}}'</code>"]
+
+    Step3 --> Step4["4️⃣ 環境変数確認<br/><code>docker inspect --format='{{json .Config.Env}}' | jq</code>"]
+
+    Step4 --> Step5["5️⃣ シェルで対話的デバッグ<br/><code>docker run -it --entrypoint /bin/sh [image]</code>"]
+
+    Step5 --> Analysis{問題は？}
+
+    Analysis -->|"設定ファイルエラー"| Fix1["✅ 設定ファイルのシンタックスチェック<br/>・YAML/JSON検証<br/>・パス確認<br/>・必須項目確認"]
+    Analysis -->|"依存サービス未起動"| Fix2["✅ 依存関係を設定<br/><code>depends_on</code>追加<br/>ヘルスチェック待機"]
+    Analysis -->|"ポート競合"| Fix3["✅ ポート番号変更<br/><code>-p 8081:8080</code><br/>または競合プロセス停止"]
+    Analysis -->|"環境変数不足"| Fix4["✅ 環境変数を追加<br/><code>-e VAR=value</code><br/><code>.env</code>ファイル確認"]
+
+    Error127 --> Retry["🔄 修正後再起動"]
+    Error126 --> Retry
+    Fix1 --> Retry
+    Fix2 --> Retry
+    Fix3 --> Retry
+    Fix4 --> Retry
+
+    style Start fill:#ffebee
+    style Error127 fill:#ffebee
+    style Error126 fill:#ffebee
+    style Error1 fill:#fff3e0
+    style ErrorOther fill:#fff3e0
+    style Fix1 fill:#e8f5e9
+    style Fix2 fill:#e8f5e9
+    style Fix3 fill:#e8f5e9
+    style Fix4 fill:#e8f5e9
+    style Retry fill:#e8f5e9
+    style Step1 fill:#e3f2fd
+    style Step2 fill:#e3f2fd
+    style Step3 fill:#e3f2fd
+    style Step4 fill:#e3f2fd
+    style Step5 fill:#e3f2fd
 ```
 
 ### 調査手順
