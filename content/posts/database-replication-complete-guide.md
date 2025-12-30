@@ -33,15 +33,18 @@ cover:
 
 ### 単一データベースの問題
 
-```
-        ┌─────────────┐
-        │   App       │
-        └──────┬──────┘
-               │
-        ┌──────▼──────┐
-        │  Database   │ ← 単一障害点
-        │   (1台)     │
-        └─────────────┘
+```mermaid
+graph TB
+    App["App"]
+    DB["Database<br/>(1台)"]
+    SPOF["← 単一障害点"]
+
+    App --> DB
+    DB -.-> SPOF
+
+    style App fill:#e3f2fd,stroke:#1976d2
+    style DB fill:#ffcdd2,stroke:#d32f2f,stroke-width:3px
+    style SPOF fill:#fff,stroke:none
 ```
 
 **問題点**:
@@ -55,20 +58,19 @@ cover:
 
 ### レプリケーションによる解決
 
-```
-        ┌─────────────────────────────────────┐
-        │              App                    │
-        └────────┬──────────────┬─────────────┘
-                 │ Write        │ Read
-        ┌────────▼────────┐     │
-        │     Primary     │     │
-        │    (Master)     │     │
-        └────────┬────────┘     │
-                 │ Replication  │
-        ┌────────▼────────┐     │
-        │     Replica     │◄────┘
-        │    (Slave)      │
-        └─────────────────┘
+```mermaid
+graph TB
+    App["App"]
+    Primary["Primary<br/>(Master)"]
+    Replica["Replica<br/>(Slave)"]
+
+    App -->|Write| Primary
+    App -->|Read| Replica
+    Primary -->|Replication| Replica
+
+    style App fill:#e3f2fd,stroke:#1976d2
+    style Primary fill:#c8e6c9,stroke:#4caf50,stroke-width:2px
+    style Replica fill:#fff3e0,stroke:#f57c00,stroke-width:2px
 ```
 
 **メリット**:
@@ -86,16 +88,19 @@ cover:
 
 ### 書き込みと読み取りの分離
 
-```
-        ┌───────────────────────────────────────────┐
-        │                   App                     │
-        └─────┬─────────────────────────────┬───────┘
-              │ INSERT/UPDATE/DELETE        │ SELECT
-              │                             │
-        ┌─────▼─────┐                 ┌─────▼─────┐
-        │  Primary  │────Replication──►│  Replica  │
-        │  (Write)  │                 │  (Read)   │
-        └───────────┘                 └───────────┘
+```mermaid
+graph LR
+    App["App"]
+    Primary["Primary<br/>(Write)"]
+    Replica["Replica<br/>(Read)"]
+
+    App -->|"INSERT/UPDATE/DELETE"| Primary
+    App -->|"SELECT"| Replica
+    Primary -->|Replication| Replica
+
+    style App fill:#e3f2fd,stroke:#1976d2
+    style Primary fill:#c8e6c9,stroke:#4caf50,stroke-width:2px
+    style Replica fill:#fff3e0,stroke:#f57c00,stroke-width:2px
 ```
 
 **Primaryへ書き込み、Replicaから読み取り**
@@ -106,16 +111,28 @@ cover:
 
 ### レプリケーションの仕組み（MySQL）
 
-```
-        Primary                         Replica
-        ┌─────────┐                    ┌─────────┐
-        │  Data   │                    │  Data   │
-        └────┬────┘                    └────▲────┘
-             │                              │
-        ┌────▼────┐                    ┌────┴────┐
-        │ Binary  │───────────────────►│ Relay   │
-        │   Log   │     Network        │   Log   │
-        └─────────┘                    └─────────┘
+```mermaid
+graph LR
+    subgraph Primary["Primary"]
+        PData["Data"]
+        BinLog["Binary Log"]
+        PData --> BinLog
+    end
+
+    subgraph Replica["Replica"]
+        RelayLog["Relay Log"]
+        RData["Data"]
+        RelayLog --> RData
+    end
+
+    BinLog -->|Network| RelayLog
+
+    style Primary fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
+    style Replica fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    style PData fill:#fff
+    style BinLog fill:#fff
+    style RelayLog fill:#fff
+    style RData fill:#fff
 ```
 
 1. Primaryで変更が発生
@@ -130,12 +147,17 @@ cover:
 
 ### 非同期レプリケーション
 
-```
-Timeline:
-Primary:  WRITE ──► COMMIT ──► Response to App
-                       │
-                       ▼ (後から)
-Replica:          Apply changes
+```mermaid
+sequenceDiagram
+    participant App
+    participant Primary
+    participant Replica
+
+    App->>Primary: WRITE
+    Primary->>Primary: COMMIT
+    Primary-->>App: Response
+    Note over Primary,Replica: 後から非同期で反映
+    Primary-->>Replica: Apply changes
 ```
 
 **特徴**:
@@ -152,12 +174,17 @@ Replica:          Apply changes
 
 ### 同期レプリケーション
 
-```
-Timeline:
-Primary:  WRITE ──► Wait for Replica ──► COMMIT ──► Response
-                           │
-                           ▼
-Replica:              Apply changes ──► ACK
+```mermaid
+sequenceDiagram
+    participant App
+    participant Primary
+    participant Replica
+
+    App->>Primary: WRITE
+    Primary->>Replica: Apply changes
+    Replica-->>Primary: ACK
+    Primary->>Primary: COMMIT
+    Primary-->>App: Response
 ```
 
 **特徴**:
@@ -180,12 +207,20 @@ SET GLOBAL rpl_semi_sync_slave_enabled = 1;
 
 ### 半同期（セミシンク）レプリケーション
 
-```
-Timeline:
-Primary:  WRITE ──► Wait for ACK ──► COMMIT ──► Response
-                         │
-                         ▼
-Replica:          Receive Log ──► ACK ──► Apply (後から)
+```mermaid
+sequenceDiagram
+    participant App
+    participant Primary
+    participant Replica
+
+    App->>Primary: WRITE
+    Primary->>Replica: Send Log
+    Replica->>Replica: Receive Log
+    Replica-->>Primary: ACK
+    Primary->>Primary: COMMIT
+    Primary-->>App: Response
+    Note over Replica: Applyは後から非同期
+    Replica->>Replica: Apply
 ```
 
 **特徴**:
@@ -230,14 +265,15 @@ flowchart TD
 
 ### 1. シングルPrimary + シングルReplica
 
-```
-        ┌──────────┐
-        │ Primary  │
-        └────┬─────┘
-             │
-        ┌────▼─────┐
-        │ Replica  │
-        └──────────┘
+```mermaid
+graph TB
+    Primary["Primary"]
+    Replica["Replica"]
+
+    Primary --> Replica
+
+    style Primary fill:#c8e6c9,stroke:#4caf50,stroke-width:2px
+    style Replica fill:#fff3e0,stroke:#f57c00,stroke-width:2px
 ```
 
 **最もシンプルな構成**
@@ -248,17 +284,21 @@ flowchart TD
 
 ### 2. シングルPrimary + マルチReplica
 
-```
-        ┌──────────┐
-        │ Primary  │
-        └────┬─────┘
-             │
-     ┌───────┼───────┐
-     │       │       │
-┌────▼──┐ ┌──▼───┐ ┌─▼─────┐
-│Replica│ │Replica│ │Replica│
-│  #1   │ │  #2   │ │  #3   │
-└───────┘ └───────┘ └───────┘
+```mermaid
+graph TB
+    Primary["Primary"]
+    R1["Replica<br/>#1"]
+    R2["Replica<br/>#2"]
+    R3["Replica<br/>#3"]
+
+    Primary --> R1
+    Primary --> R2
+    Primary --> R3
+
+    style Primary fill:#c8e6c9,stroke:#4caf50,stroke-width:2px
+    style R1 fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    style R2 fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    style R3 fill:#fff3e0,stroke:#f57c00,stroke-width:2px
 ```
 
 **読み取り負荷が高い場合**
@@ -269,8 +309,19 @@ flowchart TD
 
 ### 3. チェーンレプリケーション
 
-```
-Primary → Replica #1 → Replica #2 → Replica #3
+```mermaid
+graph LR
+    Primary["Primary"]
+    R1["Replica #1"]
+    R2["Replica #2"]
+    R3["Replica #3"]
+
+    Primary --> R1 --> R2 --> R3
+
+    style Primary fill:#c8e6c9,stroke:#4caf50,stroke-width:2px
+    style R1 fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    style R2 fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    style R3 fill:#fff3e0,stroke:#f57c00,stroke-width:2px
 ```
 
 **Primaryの負荷を減らす**
@@ -281,11 +332,15 @@ Primary → Replica #1 → Replica #2 → Replica #3
 
 ### 4. マルチPrimary（マスターマスター）
 
-```
-        ┌──────────┐         ┌──────────┐
-        │ Primary  │◄───────►│ Primary  │
-        │    #1    │         │    #2    │
-        └──────────┘         └──────────┘
+```mermaid
+graph LR
+    P1["Primary<br/>#1"]
+    P2["Primary<br/>#2"]
+
+    P1 <--> P2
+
+    style P1 fill:#c8e6c9,stroke:#4caf50,stroke-width:2px
+    style P2 fill:#c8e6c9,stroke:#4caf50,stroke-width:2px
 ```
 
 **両方で書き込み可能**
@@ -298,14 +353,25 @@ Primary → Replica #1 → Replica #2 → Replica #3
 
 ### 5. グループレプリケーション（MySQL）
 
-```
-        ┌──────────────────────────────┐
-        │     Group Replication        │
-        │  ┌──────┐ ┌──────┐ ┌──────┐  │
-        │  │Node 1│ │Node 2│ │Node 3│  │
-        │  └──────┘ └──────┘ └──────┘  │
-        └──────────────────────────────┘
-              自動フェイルオーバー
+```mermaid
+graph TB
+    subgraph GR["Group Replication"]
+        N1["Node 1"]
+        N2["Node 2"]
+        N3["Node 3"]
+
+        N1 <--> N2
+        N2 <--> N3
+        N3 <--> N1
+    end
+
+    Note["自動フェイルオーバー"]
+
+    style GR fill:#e8f5e9,stroke:#4caf50,stroke-width:3px
+    style N1 fill:#c8e6c9,stroke:#4caf50
+    style N2 fill:#c8e6c9,stroke:#4caf50
+    style N3 fill:#c8e6c9,stroke:#4caf50
+    style Note fill:#fff9c4,stroke:#f57f17
 ```
 
 **特徴**:
@@ -465,12 +531,19 @@ SELECT * FROM pg_stat_wal_receiver;
 
 ### 遅延が発生する原因
 
-```
-Primary: WRITE ──► Binary Log
-                      │
-              Network Delay (数ms)
-                      ▼
-Replica:          Relay Log ──► Apply (数ms〜数秒)
+```mermaid
+sequenceDiagram
+    participant Primary
+    participant Network
+    participant Replica
+
+    Primary->>Primary: WRITE
+    Primary->>Primary: Binary Log
+    Note over Primary,Network: Network Delay (数ms)
+    Primary->>Replica: Send Log
+    Replica->>Replica: Relay Log
+    Note over Replica: Apply (数ms〜数秒)
+    Replica->>Replica: Apply changes
 ```
 
 **遅延の原因**:
@@ -595,18 +668,22 @@ SELECT pg_promote();
 
 #### MHA（MySQL）
 
-```
-                    ┌─────────────┐
-                    │   MHA       │
-                    │  Manager    │
-                    └──────┬──────┘
-                           │ Monitor
-           ┌───────────────┼───────────────┐
-           │               │               │
-    ┌──────▼──────┐ ┌──────▼──────┐ ┌──────▼──────┐
-    │   Primary   │ │   Replica   │ │   Replica   │
-    │   (Node1)   │ │   (Node2)   │ │   (Node3)   │
-    └─────────────┘ └─────────────┘ └─────────────┘
+```mermaid
+graph TB
+    MHA["MHA Manager<br/>Monitor"]
+
+    Primary["Primary<br/>(Node1)"]
+    Replica1["Replica<br/>(Node2)"]
+    Replica2["Replica<br/>(Node3)"]
+
+    MHA -->|Monitor| Primary
+    MHA -->|Monitor| Replica1
+    MHA -->|Monitor| Replica2
+
+    style MHA fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    style Primary fill:#c8e6c9,stroke:#2e7d32,stroke-width:2px
+    style Replica1 fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    style Replica2 fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
 ```
 
 **MHAの動作**:
@@ -687,20 +764,25 @@ Primary: WRITE ──► COMMIT ──► 障害発生
 
 #### 2. スプリットブレイン
 
-```
-Network Partition:
-┌───────────────────────────┐
-│       Network Down        │
-└─────────────┬─────────────┘
-              │
-   ┌──────────┴──────────┐
-   ▼                     ▼
-┌──────┐              ┌──────┐
-│ Node1│              │ Node2│
-│ (自分がPrimary)      │ (自分がPrimary)
-└──────┘              └──────┘
-   ↓                     ↓
-両方がWriteを受け付け → データ不整合
+```mermaid
+graph TB
+    NetDown["Network Down<br/>(Network Partition)"]
+
+    Node1["Node1<br/>(自分がPrimary)"]
+    Node2["Node2<br/>(自分がPrimary)"]
+
+    Problem["両方がWriteを受け付け<br/>→ データ不整合"]
+
+    NetDown -.-> Node1
+    NetDown -.-> Node2
+
+    Node1 --> Problem
+    Node2 --> Problem
+
+    style NetDown fill:#ffcdd2,stroke:#c62828,stroke-width:2px
+    style Node1 fill:#fff9c4,stroke:#f57f17,stroke-width:2px
+    style Node2 fill:#fff9c4,stroke:#f57f17,stroke-width:2px
+    style Problem fill:#ffcdd2,stroke:#c62828,stroke-width:2px
 ```
 
 **対策**:
@@ -903,21 +985,21 @@ resource "aws_db_instance" "replica" {
 
 ### Aurora のレプリケーション
 
-```
-        ┌─────────────────────────────────────┐
-        │           Aurora Cluster            │
-        │  ┌──────────┐    ┌──────────┐       │
-        │  │  Writer  │    │  Reader  │       │
-        │  │ Instance │    │ Instance │       │
-        │  └────┬─────┘    └────┬─────┘       │
-        │       │               │             │
-        │       └───────┬───────┘             │
-        │               │                     │
-        │    ┌──────────▼──────────┐          │
-        │    │   Shared Storage   │          │
-        │    │   (6 copies, 3 AZ) │          │
-        │    └────────────────────┘          │
-        └─────────────────────────────────────┘
+```mermaid
+graph TB
+    subgraph Aurora["Aurora Cluster"]
+        Writer["Writer Instance"]
+        Reader["Reader Instance"]
+        Storage["Shared Storage<br/>(6 copies, 3 AZ)"]
+
+        Writer --> Storage
+        Reader --> Storage
+    end
+
+    style Aurora fill:#f5f5f5,stroke:#424242,stroke-width:3px
+    style Writer fill:#c8e6c9,stroke:#2e7d32,stroke-width:2px
+    style Reader fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    style Storage fill:#fff3e0,stroke:#f57c00,stroke-width:2px
 ```
 
 **Auroraの特徴**:
