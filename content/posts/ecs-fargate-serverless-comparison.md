@@ -33,22 +33,27 @@ ECS、EKS、Fargate、Lambda、Cloud Run、Azure Container Instances...
 
 ### レベル1: 自前管理（EC2 + Docker）
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                    自分で管理                           │
-│  ┌─────────────────────────────────────────────────┐   │
-│  │  EC2 Instance                                   │   │
-│  │  ┌─────────┐ ┌─────────┐ ┌─────────┐          │   │
-│  │  │Container│ │Container│ │Container│          │   │
-│  │  └─────────┘ └─────────┘ └─────────┘          │   │
-│  │  ┌─────────────────────────────────┐          │   │
-│  │  │         Docker Engine           │          │   │
-│  │  └─────────────────────────────────┘          │   │
-│  │  ┌─────────────────────────────────┐          │   │
-│  │  │         OS (Amazon Linux)       │          │   │
-│  │  └─────────────────────────────────┘          │   │
-│  └─────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────┘
+```mermaid
+graph TB
+    subgraph manage["自分で管理"]
+        subgraph ec2["EC2 Instance"]
+            c1["Container"]
+            c2["Container"]
+            c3["Container"]
+            docker["Docker Engine"]
+            os["OS (Amazon Linux)"]
+
+            c1 -.-> docker
+            c2 -.-> docker
+            c3 -.-> docker
+            docker --> os
+        end
+    end
+
+    style manage fill:#fff3e0,stroke:#f57c00,stroke-width:3px
+    style ec2 fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    style docker fill:#fff,stroke:#333,stroke-width:1px
+    style os fill:#fff,stroke:#333,stroke-width:1px
 ```
 
 **自分で管理するもの**:
@@ -64,22 +69,32 @@ ECS、EKS、Fargate、Lambda、Cloud Run、Azure Container Instances...
 
 ### レベル2: オーケストレーション（ECS on EC2 / EKS on EC2）
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                    AWS が管理                           │
-│  ┌─────────────────────────────────────────────────┐   │
-│  │            ECS / EKS Control Plane              │   │
-│  └─────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────┘
-┌─────────────────────────────────────────────────────────┐
-│                    自分で管理                           │
-│  ┌──────────────────┐  ┌──────────────────┐           │
-│  │   EC2 Instance   │  │   EC2 Instance   │           │
-│  │  ┌────┐ ┌────┐  │  │  ┌────┐ ┌────┐  │           │
-│  │  │ C1 │ │ C2 │  │  │  │ C3 │ │ C4 │  │           │
-│  │  └────┘ └────┘  │  │  └────┘ └────┘  │           │
-│  └──────────────────┘  └──────────────────┘           │
-└─────────────────────────────────────────────────────────┘
+```mermaid
+graph TB
+    subgraph aws["AWS が管理"]
+        cp["ECS / EKS Control Plane"]
+    end
+
+    subgraph manage["自分で管理"]
+        subgraph ec2_1["EC2 Instance"]
+            c1["C1"]
+            c2["C2"]
+        end
+
+        subgraph ec2_2["EC2 Instance"]
+            c3["C3"]
+            c4["C4"]
+        end
+    end
+
+    cp -.->|スケジューリング| ec2_1
+    cp -.->|スケジューリング| ec2_2
+
+    style aws fill:#e8f5e9,stroke:#4caf50,stroke-width:3px
+    style manage fill:#fff3e0,stroke:#f57c00,stroke-width:3px
+    style cp fill:#c8e6c9,stroke:#2e7d32,stroke-width:2px
+    style ec2_1 fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    style ec2_2 fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
 ```
 
 **AWS が管理**:
@@ -94,25 +109,30 @@ ECS、EKS、Fargate、Lambda、Cloud Run、Azure Container Instances...
 
 ### レベル3: サーバーレスコンテナ（ECS on Fargate / EKS on Fargate）
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                    AWS が管理                           │
-│  ┌─────────────────────────────────────────────────┐   │
-│  │            ECS / EKS Control Plane              │   │
-│  └─────────────────────────────────────────────────┘   │
-│  ┌─────────────────────────────────────────────────┐   │
-│  │                 Fargate                         │   │
-│  │  ┌────────┐  ┌────────┐  ┌────────┐           │   │
-│  │  │Task/Pod│  │Task/Pod│  │Task/Pod│           │   │
-│  │  └────────┘  └────────┘  └────────┘           │   │
-│  └─────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────┘
-┌─────────────────────────────────────────────────────────┐
-│                    自分で管理                           │
-│  ・Dockerイメージ                                       │
-│  ・タスク定義                                           │
-│  ・アプリケーションコード                               │
-└─────────────────────────────────────────────────────────┘
+```mermaid
+graph TB
+    subgraph aws["AWS が管理"]
+        cp["ECS / EKS Control Plane"]
+        subgraph fargate["Fargate"]
+            t1["Task/Pod"]
+            t2["Task/Pod"]
+            t3["Task/Pod"]
+        end
+    end
+
+    subgraph manage["自分で管理"]
+        img["・Dockerイメージ"]
+        task["・タスク定義"]
+        app["・アプリケーションコード"]
+    end
+
+    cp -.->|管理| fargate
+    manage -.->|デプロイ| fargate
+
+    style aws fill:#e8f5e9,stroke:#4caf50,stroke-width:3px
+    style manage fill:#fff3e0,stroke:#f57c00,stroke-width:3px
+    style cp fill:#c8e6c9,stroke:#2e7d32,stroke-width:2px
+    style fargate fill:#b2dfdb,stroke:#00897b,stroke-width:2px
 ```
 
 **AWS が管理**:
@@ -128,18 +148,21 @@ ECS、EKS、Fargate、Lambda、Cloud Run、Azure Container Instances...
 
 ### レベル4: フルマネージド（Lambda / App Runner）
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                    AWS が管理                           │
-│  ┌─────────────────────────────────────────────────┐   │
-│  │               Lambda / App Runner               │   │
-│  │        コンテナの概念すら隠蔽される              │   │
-│  └─────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────┘
-┌─────────────────────────────────────────────────────────┐
-│                    自分で管理                           │
-│  ・コード or Dockerイメージ                             │
-└─────────────────────────────────────────────────────────┘
+```mermaid
+graph TB
+    subgraph aws["AWS が管理"]
+        service["Lambda / App Runner<br/>(コンテナの概念すら隠蔽される)"]
+    end
+
+    subgraph manage["自分で管理"]
+        code["・コード or Dockerイメージ"]
+    end
+
+    code -.->|デプロイ| service
+
+    style aws fill:#e8f5e9,stroke:#4caf50,stroke-width:3px
+    style manage fill:#fff3e0,stroke:#f57c00,stroke-width:3px
+    style service fill:#c8e6c9,stroke:#2e7d32,stroke-width:2px
 ```
 
 ---
@@ -172,26 +195,29 @@ Fargate の役割:
 
 ### ECS + Fargate = サーバーレスコンテナ
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                      ECS Cluster                        │
-│                                                         │
-│  ┌───────────────────────────────────────────────────┐ │
-│  │                    Service                        │ │
-│  │   ┌─────────────┐  ┌─────────────┐               │ │
-│  │   │    Task     │  │    Task     │  ← Fargate で │ │
-│  │   │  (Container)│  │  (Container)│    実行       │ │
-│  │   └─────────────┘  └─────────────┘               │ │
-│  └───────────────────────────────────────────────────┘ │
-│                                                         │
-│  ┌───────────────────────────────────────────────────┐ │
-│  │              Task Definition                      │ │
-│  │  - Image: my-app:latest                          │ │
-│  │  - CPU: 256 (.25 vCPU)                           │ │
-│  │  - Memory: 512 MB                                │ │
-│  │  - Port: 8080                                    │ │
-│  └───────────────────────────────────────────────────┘ │
-└─────────────────────────────────────────────────────────┘
+```mermaid
+graph TB
+    subgraph cluster["ECS Cluster"]
+        subgraph service["Service"]
+            t1["Task<br/>(Container)"]
+            t2["Task<br/>(Container)"]
+            fargate["← Fargate で実行"]
+        end
+
+        subgraph taskdef["Task Definition"]
+            img["Image: my-app:latest"]
+            cpu["CPU: 256 (.25 vCPU)"]
+            mem["Memory: 512 MB"]
+            port["Port: 8080"]
+        end
+    end
+
+    taskdef -.->|定義| service
+
+    style cluster fill:#e3f2fd,stroke:#1976d2,stroke-width:3px
+    style service fill:#bbdefb,stroke:#1565c0,stroke-width:2px
+    style taskdef fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    style fargate fill:#c8e6c9,stroke:#2e7d32,stroke-width:1px
 ```
 
 ---
@@ -222,39 +248,34 @@ Fargate の役割:
 
 ### GCP Cloud Run との比較
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                    Cloud Run                            │
-│                                                         │
-│  特徴:                                                  │
-│  - リクエストベースの課金                               │
-│  - 0にスケールダウン可能                                │
-│  - HTTPリクエストがトリガー                             │
-│  - コールドスタートあり                                 │
-│  - 設定がシンプル                                       │
-│                                                         │
-│  向いているケース:                                      │
-│  - Webアプリ、API                                       │
-│  - トラフィックが不定期                                 │
-│  - コスト最適化重視                                     │
-└─────────────────────────────────────────────────────────┘
+```mermaid
+graph LR
+    subgraph cloudrun["Cloud Run"]
+        direction TB
+        cr_title["<b>特徴:</b>"]
+        cr_features["・リクエストベースの課金<br/>・0にスケールダウン可能<br/>・HTTPリクエストがトリガー<br/>・コールドスタートあり<br/>・設定がシンプル"]
+        cr_usecase_title["<b>向いているケース:</b>"]
+        cr_usecase["・Webアプリ、API<br/>・トラフィックが不定期<br/>・コスト最適化重視"]
 
-┌─────────────────────────────────────────────────────────┐
-│                    ECS Fargate                          │
-│                                                         │
-│  特徴:                                                  │
-│  - タスク単位の課金（起動時間）                         │
-│  - 最小1タスクは常時起動（設定次第）                    │
-│  - 様々なトリガー（HTTP、スケジュール、イベント）       │
-│  - VPC統合が強力                                        │
-│  - 設定項目が多い（柔軟）                               │
-│                                                         │
-│  向いているケース:                                      │
-│  - 常時起動のサービス                                   │
-│  - VPC内リソースへのアクセス                            │
-│  - 複雑なネットワーク要件                               │
-│  - AWS サービスとの深い統合                             │
-└─────────────────────────────────────────────────────────┘
+        cr_title -.-> cr_features
+        cr_features -.-> cr_usecase_title
+        cr_usecase_title -.-> cr_usecase
+    end
+
+    subgraph fargate["ECS Fargate"]
+        direction TB
+        fg_title["<b>特徴:</b>"]
+        fg_features["・タスク単位の課金(起動時間)<br/>・最小1タスクは常時起動<br/>・様々なトリガー<br/>・VPC統合が強力<br/>・設定項目が多い(柔軟)"]
+        fg_usecase_title["<b>向いているケース:</b>"]
+        fg_usecase["・常時起動のサービス<br/>・VPC内リソースへのアクセス<br/>・複雑なネットワーク要件<br/>・AWSサービスとの深い統合"]
+
+        fg_title -.-> fg_features
+        fg_features -.-> fg_usecase_title
+        fg_usecase_title -.-> fg_usecase
+    end
+
+    style cloudrun fill:#e8f5e9,stroke:#4caf50,stroke-width:3px
+    style fargate fill:#e3f2fd,stroke:#1976d2,stroke-width:3px
 ```
 
 ### Azure Container Instances (ACI) との比較
@@ -795,27 +816,32 @@ memory = "4096"  # 4 GB
 
 ### Lambda との併用
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                    Architecture                         │
-│                                                         │
-│  ┌───────────────────────────────────────────────────┐ │
-│  │              API Gateway                          │ │
-│  └─────────────────────┬─────────────────────────────┘ │
-│                        │                               │
-│        ┌───────────────┴───────────────┐               │
-│        │                               │               │
-│  ┌─────▼─────┐                   ┌─────▼─────┐        │
-│  │  Lambda   │                   │ECS Fargate│        │
-│  │ (軽量API) │                   │(重い処理) │        │
-│  │           │                   │           │        │
-│  │ /health   │                   │ /process  │        │
-│  │ /status   │                   │ /analyze  │        │
-│  └───────────┘                   └───────────┘        │
-│                                                         │
-│  軽量なエンドポイント → Lambda（コスト最適化）          │
-│  重い処理 → ECS Fargate（性能優先）                     │
-└─────────────────────────────────────────────────────────┘
+```mermaid
+graph TB
+    subgraph arch["Architecture"]
+        api["API Gateway"]
+
+        subgraph lambda["Lambda<br/>(軽量API)"]
+            l1["/health"]
+            l2["/status"]
+        end
+
+        subgraph fargate["ECS Fargate<br/>(重い処理)"]
+            f1["/process"]
+            f2["/analyze"]
+        end
+
+        api --> lambda
+        api --> fargate
+
+        note["軽量なエンドポイント → Lambda (コスト最適化)<br/>重い処理 → ECS Fargate (性能優先)"]
+    end
+
+    style arch fill:#f5f5f5,stroke:#666,stroke-width:3px
+    style api fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    style lambda fill:#c8e6c9,stroke:#2e7d32,stroke-width:2px
+    style fargate fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    style note fill:#fff9c4,stroke:#f57f17,stroke-width:1px
 ```
 
 ---
