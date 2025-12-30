@@ -71,14 +71,30 @@ flowchart LR
 
 ### 仕組みの本質（深入りしすぎない）
 
-```
-【通常の接続】
-PC → インターネット → ファイアウォール ✗ → 内部DB
-     （ブロック）
+```mermaid
+graph LR
+    subgraph normal["通常の接続"]
+        PC1["PC"]
+        Internet1["インターネット"]
+        FW1["ファイアウォール<br/>✗ ブロック"]
+        DB1["内部DB"]
 
-【トンネル経由】
-PC → SSHトンネル → 踏み台 → 内部DB
-     （暗号化された安全な経路）
+        PC1 --> Internet1 --> FW1 -.-x DB1
+    end
+
+    subgraph tunnel["トンネル経由"]
+        PC2["PC"]
+        SSH["SSHトンネル<br/>(暗号化された安全な経路)"]
+        Bastion["踏み台"]
+        DB2["内部DB"]
+
+        PC2 --> SSH --> Bastion --> DB2
+    end
+
+    style normal fill:#ffebee,stroke:#f44336,stroke-width:2px
+    style tunnel fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
+    style FW1 fill:#ffcdd2,stroke:#c62828
+    style SSH fill:#c8e6c9,stroke:#2e7d32,stroke-width:2px
 ```
 
 トンネルは「通信を別の通信で包んで運ぶ」技術だ。SSHトンネルの場合、すべての通信がSSHの暗号化された経路を通るため、盗聴やなりすましのリスクを軽減できる。
@@ -718,18 +734,19 @@ PM「それでいいじゃん」
 
 ## 段階的改善ロードマップ
 
-```
-Phase 0: トンネルで突破（即日〜1週間）
-    └─ とにかく繋がる状態を作る
+```mermaid
+graph TB
+    Phase0["Phase 0: トンネルで突破<br/>(即日〜1週間)<br/>とにかく繋がる状態を作る"]
+    Phase1["Phase 1: 権限制御・監査ログ<br/>(1〜2週間)<br/>「誰が何をしたか」を追跡可能に"]
+    Phase2["Phase 2: 集約 or API化<br/>(予算確保後)<br/>トンネルからの脱却"]
+    Phase3["Phase 3: ゼロトラスト寄り構成<br/>(成熟後)<br/>IAM、一時認証、SIEM連携"]
 
-Phase 1: 権限制御・監査ログ（1〜2週間）
-    └─ 「誰が何をしたか」を追跡可能に
+    Phase0 --> Phase1 --> Phase2 --> Phase3
 
-Phase 2: 集約 or API化（予算確保後）
-    └─ トンネルからの脱却
-
-Phase 3: ゼロトラスト寄り構成（成熟後）
-    └─ IAM、一時認証、SIEM連携
+    style Phase0 fill:#ffebee,stroke:#f44336,stroke-width:2px
+    style Phase1 fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    style Phase2 fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
+    style Phase3 fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
 ```
 
 ### Phase 0：トンネルで突破
