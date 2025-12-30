@@ -34,15 +34,15 @@ cover:
 
 ### 単一サーバーの限界
 
-```
-        ┌─────────────┐
-        │   Client    │
-        └──────┬──────┘
-               │
-        ┌──────▼──────┐
-        │   Server    │ ← 全リクエストがここに集中
-        │  (1台)      │
-        └─────────────┘
+```mermaid
+flowchart TB
+    Client["Client"]
+    Server["Server<br/>(1台)<br/>← 全リクエストがここに集中"]
+
+    Client --> Server
+
+    style Client fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    style Server fill:#ffebee,stroke:#c62828,stroke-width:2px
 ```
 
 **問題点**:
@@ -52,19 +52,24 @@ cover:
 
 ### ロードバランサーによる解決
 
-```
-        ┌─────────────┐
-        │   Client    │
-        └──────┬──────┘
-               │
-        ┌──────▼──────┐
-        │    Load     │
-        │  Balancer   │
-        └──┬───┬───┬──┘
-           │   │   │
-    ┌──────▼┐ ┌▼──┐ ┌▼──────┐
-    │Server1│ │S2 │ │Server3│
-    └───────┘ └───┘ └───────┘
+```mermaid
+flowchart TB
+    Client["Client"]
+    LB["Load<br/>Balancer"]
+    S1["Server1"]
+    S2["Server2"]
+    S3["Server3"]
+
+    Client --> LB
+    LB --> S1
+    LB --> S2
+    LB --> S3
+
+    style Client fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    style LB fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    style S1 fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
+    style S2 fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
+    style S3 fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
 ```
 
 **メリット**:
@@ -172,12 +177,29 @@ flowchart TD
 
 ### 1. ラウンドロビン（Round Robin）
 
-```
-リクエスト1 → Server1
-リクエスト2 → Server2
-リクエスト3 → Server3
-リクエスト4 → Server1（最初に戻る）
-...
+```mermaid
+flowchart LR
+    R1["リクエスト1"]
+    R2["リクエスト2"]
+    R3["リクエスト3"]
+    R4["リクエスト4<br/>(最初に戻る)"]
+
+    S1["Server1"]
+    S2["Server2"]
+    S3["Server3"]
+
+    R1 --> S1
+    R2 --> S2
+    R3 --> S3
+    R4 --> S1
+
+    style R1 fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    style R2 fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    style R3 fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    style R4 fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    style S1 fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
+    style S2 fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
+    style S3 fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
 ```
 
 **特徴**:
@@ -198,11 +220,22 @@ upstream backend {
 
 ### 2. 重み付きラウンドロビン（Weighted Round Robin）
 
-```
-weight=3: Server1 → Server1 → Server1
-weight=2: Server2 → Server2
-weight=1: Server3
-（繰り返し）
+```mermaid
+flowchart TB
+    subgraph Weight["重みに応じて振り分け"]
+        W1["weight=3: Server1"]
+        W2["weight=2: Server2"]
+        W3["weight=1: Server3"]
+    end
+
+    Dist["リクエストの分配<br/>━━━━━━<br/>Server1 → Server1 → Server1 →<br/>Server2 → Server2 →<br/>Server3 →<br/>(繰り返し)"]
+
+    Weight --> Dist
+
+    style W1 fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
+    style W2 fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
+    style W3 fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
+    style Dist fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
 ```
 
 **特徴**:
@@ -221,10 +254,18 @@ upstream backend {
 
 ### 3. 最小接続数（Least Connections）
 
-```
-Server1: 10接続中
-Server2: 5接続中   ← 次のリクエストはここ
-Server3: 8接続中
+```mermaid
+flowchart LR
+    S1["Server1<br/>10接続中"]
+    S2["Server2<br/>5接続中<br/>← 次のリクエストはここ"]
+    S3["Server3<br/>8接続中"]
+
+    Next["次のリクエスト"] --> S2
+
+    style S1 fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    style S2 fill:#e8f5e9,stroke:#4caf50,stroke-width:3px
+    style S3 fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    style Next fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
 ```
 
 **特徴**:
@@ -245,10 +286,17 @@ upstream backend {
 
 ### 4. IPハッシュ（IP Hash）
 
-```
-クライアントIP: 192.168.1.100
-hash(192.168.1.100) % 3 = 1
-→ 常にServer2へ
+```mermaid
+flowchart LR
+    Client["クライアントIP<br/>192.168.1.100"]
+    Hash["hash(192.168.1.100) % 3 = 1"]
+    S2["Server2<br/>← 常にここへ"]
+
+    Client --> Hash --> S2
+
+    style Client fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    style Hash fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    style S2 fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
 ```
 
 **特徴**:
@@ -269,14 +317,23 @@ upstream backend {
 
 ### 5. 一貫性ハッシュ（Consistent Hashing）
 
-```
-       ┌─────────────────────────────────┐
-       │          Hash Ring              │
-       │    S1        S2        S3       │
-       │   /  \      /  \      /  \      │
-       │  ↓    ↓    ↓    ↓    ↓    ↓     │
-       │ Client群がリング上の位置で振り分け │
-       └─────────────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph Ring["Hash Ring"]
+        direction LR
+        S1["S1"] --> S2["S2"]
+        S2 --> S3["S3"]
+        S3 -.->|"リング状"| S1
+    end
+
+    Note["Client群がリング上の位置で振り分け"]
+
+    Ring --> Note
+
+    style S1 fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
+    style S2 fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
+    style S3 fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
+    style Note fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
 ```
 
 **特徴**:
@@ -320,14 +377,31 @@ upstream backend {
 
 ### アルゴリズムの選択指針
 
-```
-「セッション維持が必要？」
-   ├─ Yes → IP Hash or Sticky Session
-   └─ No → 「サーバー性能は均一？」
-              ├─ Yes → 「処理時間は一定？」
-              │         ├─ Yes → Round Robin
-              │         └─ No → Least Connections
-              └─ No → Weighted Round Robin
+```mermaid
+flowchart TD
+    Q1["セッション維持が必要？"]
+    Q2["サーバー性能は均一？"]
+    Q3["処理時間は一定？"]
+
+    A1["IP Hash or<br/>Sticky Session"]
+    A2["Round Robin"]
+    A3["Least Connections"]
+    A4["Weighted<br/>Round Robin"]
+
+    Q1 -->|Yes| A1
+    Q1 -->|No| Q2
+    Q2 -->|Yes| Q3
+    Q2 -->|No| A4
+    Q3 -->|Yes| A2
+    Q3 -->|No| A3
+
+    style Q1 fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    style Q2 fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    style Q3 fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    style A1 fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    style A2 fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
+    style A3 fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
+    style A4 fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
 ```
 
 ---
@@ -792,9 +866,20 @@ def health():
 
 ### 問題：セッションの不整合
 
-```
-リクエスト1 → Server1（セッション作成）
-リクエスト2 → Server2（セッションがない！）
+```mermaid
+flowchart LR
+    R1["リクエスト1"]
+    R2["リクエスト2"]
+    S1["Server1<br/>(セッション作成)"]
+    S2["Server2<br/>(セッションがない！)"]
+
+    R1 --> S1
+    R2 --> S2
+
+    style R1 fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    style R2 fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    style S1 fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
+    style S2 fill:#ffebee,stroke:#c62828,stroke-width:2px
 ```
 
 ### 解決策1: スティッキーセッション
@@ -825,20 +910,27 @@ upstream backend {
 
 ### 解決策2: 外部セッションストア
 
-```
-       ┌─────────────┐
-       │     LB      │
-       └──┬───┬───┬──┘
-          │   │   │
-   ┌──────▼┐ ┌▼──┐ ┌▼──────┐
-   │Server1│ │S2 │ │Server3│
-   └───┬───┘ └─┬─┘ └───┬───┘
-       │       │       │
-       └───────┼───────┘
-               │
-        ┌──────▼──────┐
-        │    Redis    │  ← セッションを集中管理
-        └─────────────┘
+```mermaid
+flowchart TB
+    LB["Load Balancer"]
+    S1["Server1"]
+    S2["Server2"]
+    S3["Server3"]
+    Redis["Redis<br/>← セッションを集中管理"]
+
+    LB --> S1
+    LB --> S2
+    LB --> S3
+
+    S1 --> Redis
+    S2 --> Redis
+    S3 --> Redis
+
+    style LB fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    style S1 fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
+    style S2 fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
+    style S3 fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
+    style Redis fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
 ```
 
 ```python
@@ -905,23 +997,23 @@ def verify_token():
 
 ### LBの冗長化
 
-```
-        ┌─────────────────────────────────┐
-        │         Virtual IP              │
-        │       (192.168.1.100)           │
-        └────────────┬────────────────────┘
-                     │
-          ┌──────────┴──────────┐
-          │                     │
-   ┌──────▼──────┐       ┌──────▼──────┐
-   │    LB1      │       │    LB2      │
-   │  (Active)   │◄─────►│  (Standby)  │
-   └──────┬──────┘       └──────┬──────┘
-          │      Heartbeat      │
-          │                     │
-   ┌──────▼─────────────────────▼──────┐
-   │           Backend Servers          │
-   └────────────────────────────────────┘
+```mermaid
+flowchart TB
+    VIP["Virtual IP<br/>(192.168.1.100)"]
+    LB1["LB1<br/>(Active)"]
+    LB2["LB2<br/>(Standby)"]
+    Backend["Backend Servers"]
+
+    VIP --> LB1
+    VIP --> LB2
+    LB1 <-->|Heartbeat| LB2
+    LB1 --> Backend
+    LB2 --> Backend
+
+    style VIP fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    style LB1 fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
+    style LB2 fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    style Backend fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
 ```
 
 ### Keepalivedによる冗長化
@@ -978,21 +1070,21 @@ vrrp_instance VI_1 {
 
 ### AWSでの高可用性
 
-```
-        ┌─────────────────────────────────────┐
-        │              Route 53               │
-        │         (DNS Failover)              │
-        └────────────────┬────────────────────┘
-                         │
-        ┌────────────────▼────────────────────┐
-        │           ALB / NLB                 │
-        │   (Multi-AZ, 自動フェイルオーバー)   │
-        └───┬─────────────────────────────┬───┘
-            │                             │
-     ┌──────▼──────┐               ┌──────▼──────┐
-     │    AZ-a     │               │    AZ-c     │
-     │  Servers    │               │  Servers    │
-     └─────────────┘               └─────────────┘
+```mermaid
+flowchart TB
+    R53["Route 53<br/>(DNS Failover)"]
+    LB["ALB / NLB<br/>(Multi-AZ, 自動フェイルオーバー)"]
+    AZa["AZ-a<br/>Servers"]
+    AZc["AZ-c<br/>Servers"]
+
+    R53 --> LB
+    LB --> AZa
+    LB --> AZc
+
+    style R53 fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    style LB fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    style AZa fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
+    style AZc fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
 ```
 
 AWSのALB/NLBは、複数AZにまたがって自動的に冗長化される。
