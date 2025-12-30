@@ -32,15 +32,18 @@ cover:
 
 ### パーティショニング（単一DB内の分割）
 
-```
-┌─────────────────────────────────────┐
-│             Database                │
-│  ┌─────────┬─────────┬─────────┐   │
-│  │Partition│Partition│Partition│   │
-│  │  2023   │  2024   │  2025   │   │
-│  └─────────┴─────────┴─────────┘   │
-└─────────────────────────────────────┘
-         単一DBサーバー内
+```mermaid
+flowchart TB
+    subgraph DB["Database (単一DBサーバー内)"]
+        P1["Partition<br/>2023"]
+        P2["Partition<br/>2024"]
+        P3["Partition<br/>2025"]
+    end
+
+    style DB fill:#e3f2fd,stroke:#1976d2,stroke-width:3px
+    style P1 fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    style P2 fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    style P3 fill:#fff3e0,stroke:#f57c00,stroke-width:2px
 ```
 
 **特徴**:
@@ -50,12 +53,15 @@ cover:
 
 ### シャーディング（複数DBへの分割）
 
-```
-┌───────────┐  ┌───────────┐  ┌───────────┐
-│  Shard 1  │  │  Shard 2  │  │  Shard 3  │
-│  (A-H)    │  │  (I-P)    │  │  (Q-Z)    │
-└───────────┘  └───────────┘  └───────────┘
-   DB Server1     DB Server2     DB Server3
+```mermaid
+flowchart LR
+    S1["Shard 1<br/>(A-H)<br/>DB Server1"]
+    S2["Shard 2<br/>(I-P)<br/>DB Server2"]
+    S3["Shard 3<br/>(Q-Z)<br/>DB Server3"]
+
+    style S1 fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
+    style S2 fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
+    style S3 fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
 ```
 
 **特徴**:
@@ -91,19 +97,25 @@ flowchart TD
 
 ### 垂直分割（テーブル単位）
 
-```
-Before:
-┌─────────────────────────────────────────┐
-│  users, orders, products, logs, ...     │
-│              (全テーブル)                │
-└─────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph Before["Before: 単一DB"]
+        ALL["users, orders, products, logs, ...<br/>(全テーブル)"]
+    end
 
-After:
-┌─────────────┐  ┌─────────────┐  ┌─────────────┐
-│   users     │  │   orders    │  │    logs     │
-│  products   │  │  payments   │  │   metrics   │
-└─────────────┘  └─────────────┘  └─────────────┘
-   User DB         Order DB         Log DB
+    subgraph After["After: 機能別に分割"]
+        direction LR
+        DB1["User DB<br/>━━━━━━<br/>users<br/>products"]
+        DB2["Order DB<br/>━━━━━━<br/>orders<br/>payments"]
+        DB3["Log DB<br/>━━━━━━<br/>logs<br/>metrics"]
+    end
+
+    Before --> After
+
+    style ALL fill:#ffebee,stroke:#c62828,stroke-width:2px
+    style DB1 fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
+    style DB2 fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    style DB3 fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
 ```
 
 **特徴**:
@@ -132,19 +144,25 @@ class DatabaseRouter:
 
 ### 水平分割（行単位）
 
-```
-Before:
-┌────────────────────────────────────────┐
-│  users (1億行)                         │
-│  id=1, id=2, id=3, ... id=100000000   │
-└────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph Before["Before: 単一テーブル"]
+        USERS["users (1億行)<br/>id=1, id=2, id=3, ... id=100000000"]
+    end
 
-After:
-┌──────────────┐  ┌──────────────┐  ┌──────────────┐
-│  users       │  │  users       │  │  users       │
-│  id 1-33M    │  │  id 34M-66M  │  │  id 67M-100M │
-└──────────────┘  └──────────────┘  └──────────────┘
-   Shard 1           Shard 2           Shard 3
+    subgraph After["After: 行単位で分割"]
+        direction LR
+        S1["Shard 1<br/>━━━━━━<br/>users<br/>id 1-33M"]
+        S2["Shard 2<br/>━━━━━━<br/>users<br/>id 34M-66M"]
+        S3["Shard 3<br/>━━━━━━<br/>users<br/>id 67M-100M"]
+    end
+
+    Before --> After
+
+    style USERS fill:#ffebee,stroke:#c62828,stroke-width:2px
+    style S1 fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
+    style S2 fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
+    style S3 fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
 ```
 
 **特徴**:
@@ -158,10 +176,17 @@ After:
 
 ### 1. レンジベースシャーディング
 
-```
-Shard 1: user_id 1 ~ 1,000,000
-Shard 2: user_id 1,000,001 ~ 2,000,000
-Shard 3: user_id 2,000,001 ~ 3,000,000
+```mermaid
+flowchart LR
+    subgraph Ranges["ID範囲で分割"]
+        S1["Shard 1<br/>━━━━━━<br/>user_id<br/>1 ~ 1,000,000"]
+        S2["Shard 2<br/>━━━━━━<br/>user_id<br/>1,000,001 ~ 2,000,000"]
+        S3["Shard 3<br/>━━━━━━<br/>user_id<br/>2,000,001 ~ 3,000,000"]
+    end
+
+    style S1 fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
+    style S2 fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
+    style S3 fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
 ```
 
 ```python
@@ -184,12 +209,29 @@ def get_shard(user_id):
 
 ### 2. ハッシュベースシャーディング
 
-```
-Shard = hash(user_id) % num_shards
+```mermaid
+flowchart LR
+    HASH["hash(user_id) % num_shards"]
 
-hash(12345) % 3 = 0 → Shard 1
-hash(67890) % 3 = 1 → Shard 2
-hash(11111) % 3 = 2 → Shard 3
+    U1["user_id: 12345<br/>hash % 3 = 0"]
+    U2["user_id: 67890<br/>hash % 3 = 1"]
+    U3["user_id: 11111<br/>hash % 3 = 2"]
+
+    S1["Shard 1"]
+    S2["Shard 2"]
+    S3["Shard 3"]
+
+    U1 --> S1
+    U2 --> S2
+    U3 --> S3
+
+    style HASH fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    style U1 fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    style U2 fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    style U3 fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    style S1 fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
+    style S2 fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
+    style S3 fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
 ```
 
 ```python
@@ -210,21 +252,27 @@ def get_shard(user_id, num_shards=3):
 
 ### 3. 一貫性ハッシュ（Consistent Hashing）
 
-```
-                    ┌─────────────────┐
-                    │   Hash Ring     │
-                    │                 │
-                 Shard1             Shard2
-                   │                 │
-                   ▼                 ▼
-         ┌─────────────────────────────────┐
-         │    0 ──────────────────► 2^32   │
-         │    │     │     │     │         │
-         │   S1    K1    S2    K2    S3   │
-         └─────────────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph Ring["Hash Ring (0 → 2^32)"]
+        direction LR
+        H0["0"] --> S1["Shard1"]
+        S1 --> K1["Key K1"]
+        K1 --> S2["Shard2"]
+        S2 --> K2["Key K2"]
+        K2 --> S3["Shard3"]
+        S3 -.->|時計回り| H0
+    end
 
-Key K1 → 時計回りで最初に見つかるシャード → S2
-Key K2 → 時計回りで最初に見つかるシャード → S3
+    K1 -.->|"時計回りで最初に<br/>見つかるシャード"| S2
+    K2 -.->|"時計回りで最初に<br/>見つかるシャード"| S3
+
+    style S1 fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
+    style S2 fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
+    style S3 fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
+    style K1 fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    style K2 fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    style H0 fill:#fff3e0,stroke:#f57c00,stroke-width:2px
 ```
 
 ```python
@@ -284,19 +332,30 @@ ch.add_node('shard4')
 
 ### 4. ディレクトリベースシャーディング
 
-```
-┌─────────────────────────────────────────┐
-│           Lookup Table                  │
-│  user_id 1-100    → shard1             │
-│  user_id 101-200  → shard2             │
-│  user_id 201-300  → shard1  (移動後)   │
-│  user_id 301-400  → shard3             │
-└─────────────────────────────────────────┘
-               │
-               ▼
-    ┌──────────┬──────────┬──────────┐
-    │  Shard1  │  Shard2  │  Shard3  │
-    └──────────┴──────────┴──────────┘
+```mermaid
+flowchart TB
+    subgraph Lookup["Lookup Table (ルックアップテーブル)"]
+        L1["user_id 1-100 → shard1"]
+        L2["user_id 101-200 → shard2"]
+        L3["user_id 201-300 → shard1 (移動後)"]
+        L4["user_id 301-400 → shard3"]
+    end
+
+    subgraph Shards["シャード"]
+        S1["Shard1"]
+        S2["Shard2"]
+        S3["Shard3"]
+    end
+
+    L1 --> S1
+    L2 --> S2
+    L3 --> S1
+    L4 --> S3
+
+    style Lookup fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    style S1 fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
+    style S2 fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
+    style S3 fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
 ```
 
 ```python
@@ -433,38 +492,49 @@ CREATE TABLE orders (
 
 ### 解決策3: グローバルテーブル
 
-```
-┌───────────────────────────────────────────────────┐
-│              Global Table (読み取り専用)           │
-│  ┌────────┐  ┌────────┐  ┌────────┐              │
-│  │ Master │  │ Replica│  │ Replica│              │
-│  │ (全員)  │→│(Shard1)│→│(Shard2)│              │
-│  └────────┘  └────────┘  └────────┘              │
-└───────────────────────────────────────────────────┘
+```mermaid
+flowchart LR
+    subgraph Global["Global Table (読み取り専用)"]
+        Master["Master<br/>(全データ)"]
+        R1["Replica<br/>(Shard1)"]
+        R2["Replica<br/>(Shard2)"]
+
+        Master -->|レプリケーション| R1
+        Master -->|レプリケーション| R2
+    end
+
+    style Master fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    style R1 fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
+    style R2 fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
 ```
 
 更新頻度が低いマスタデータ（国リスト、カテゴリ等）は全シャードにレプリカを置く。
 
 ### 解決策4: Scatter-Gather パターン
 
-```
-          ┌─────────────────────────────────┐
-          │          Coordinator            │
-          │   (クエリを分散・集約)            │
-          └─────────┬───────────────────────┘
-                    │
-        ┌───────────┼───────────┐
-        │           │           │
-   ┌────▼───┐  ┌────▼───┐  ┌────▼───┐
-   │ Shard1 │  │ Shard2 │  │ Shard3 │
-   │ Query  │  │ Query  │  │ Query  │
-   └────┬───┘  └────┬───┘  └────┬───┘
-        │           │           │
-        └───────────┼───────────┘
-                    │
-          ┌─────────▼─────────┐
-          │   Merge Results   │
-          └───────────────────┘
+```mermaid
+flowchart TB
+    Coordinator["Coordinator<br/>(クエリを分散・集約)"]
+
+    S1["Shard1<br/>Query"]
+    S2["Shard2<br/>Query"]
+    S3["Shard3<br/>Query"]
+
+    Merge["Merge Results<br/>(結果をマージ)"]
+
+    Coordinator -->|クエリ分散| S1
+    Coordinator -->|クエリ分散| S2
+    Coordinator -->|クエリ分散| S3
+
+    S1 -->|結果| Merge
+    S2 -->|結果| Merge
+    S3 -->|結果| Merge
+
+    style Coordinator fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    style S1 fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
+    style S2 fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
+    style S3 fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
+    style Merge fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
 ```
 
 ```python
@@ -513,19 +583,30 @@ def transfer(from_user, to_user, amount):
 
 ### 解決策1: 2フェーズコミット（2PC）
 
-```
-Coordinator:
-  1. Prepare Phase
-     → Shard1: PREPARE (ロック取得)
-     → Shard2: PREPARE (ロック取得)
+```mermaid
+sequenceDiagram
+    participant C as Coordinator
+    participant S1 as Shard1
+    participant S2 as Shard2
 
-  2. 全員がOKなら
-     → Shard1: COMMIT
-     → Shard2: COMMIT
+    Note over C,S2: Phase 1: Prepare
 
-  3. 誰かがNGなら
-     → Shard1: ROLLBACK
-     → Shard2: ROLLBACK
+    C->>S1: PREPARE (ロック取得)
+    S1-->>C: OK
+    C->>S2: PREPARE (ロック取得)
+    S2-->>C: OK
+
+    Note over C,S2: Phase 2: Commit (全員OKの場合)
+
+    C->>S1: COMMIT
+    C->>S2: COMMIT
+    S1-->>C: Done
+    S2-->>C: Done
+
+    Note over C,S2: Phase 2: Rollback (誰かNGの場合)
+
+    C->>S1: ROLLBACK
+    C->>S2: ROLLBACK
 ```
 
 **問題点**:
@@ -535,17 +616,27 @@ Coordinator:
 
 ### 解決策2: Saga パターン
 
-```
-┌────────────────────────────────────────────────────────────┐
-│                       Saga                                 │
-│                                                            │
-│  Step 1: Shard1 で残高を減らす                             │
-│      ↓ 成功                                                │
-│  Step 2: Shard2 で残高を増やす                             │
-│      ↓ 失敗したら                                          │
-│  Compensate: Shard1 で残高を戻す（補償トランザクション）    │
-│                                                            │
-└────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    Start["Saga開始"]
+    Step1["Step 1:<br/>Shard1で残高を減らす"]
+    Step2["Step 2:<br/>Shard2で残高を増やす"]
+    Success["成功"]
+    Compensate["Compensate:<br/>Shard1で残高を戻す<br/>(補償トランザクション)"]
+    Fail["失敗"]
+
+    Start --> Step1
+    Step1 -->|成功| Step2
+    Step2 -->|成功| Success
+    Step2 -->|失敗| Compensate
+    Compensate --> Fail
+
+    style Start fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    style Step1 fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    style Step2 fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    style Success fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
+    style Compensate fill:#ffebee,stroke:#c62828,stroke-width:2px
+    style Fail fill:#ffebee,stroke:#c62828,stroke-width:2px
 ```
 
 ```python
