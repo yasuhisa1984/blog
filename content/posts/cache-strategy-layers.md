@@ -589,20 +589,88 @@ sync; echo 3 > /proc/sys/vm/drop_caches
 
 ## 4つのキャッシュパターン
 
+キャッシュの実装方法には、主に4つのパターンがあります。用途に応じて使い分けることが重要です。
+
+```mermaid
+graph TB
+    subgraph CacheAside["Cache-Aside（最も一般的）"]
+        CA1[アプリ] -->|1. 確認| CA_Cache[キャッシュ]
+        CA_Cache -->|2. ミス| CA1
+        CA1 -->|3. 取得| CA_DB[DB]
+        CA_DB -->|4. 返却| CA1
+        CA1 -->|5. 保存| CA_Cache
+    end
+
+    subgraph ReadThrough["Read-Through（キャッシュが代行）"]
+        RT1[アプリ] -->|1. リクエスト| RT_Cache[キャッシュ]
+        RT_Cache -->|2. ミス時| RT_DB[DB]
+        RT_DB -->|3. 取得| RT_Cache
+        RT_Cache -->|4. 返却| RT1
+    end
+
+    subgraph WriteThrough["Write-Through（同期的）"]
+        WT1[アプリ] -->|1. 書込| WT_Cache[キャッシュ]
+        WT_Cache -->|2. 同期書込| WT_DB[DB]
+        WT_DB -->|3. 完了| WT_Cache
+        WT_Cache -->|4. 完了| WT1
+    end
+
+    subgraph WriteBack["Write-Back（非同期）"]
+        WB1[アプリ] -->|1. 書込| WB_Cache[キャッシュ]
+        WB_Cache -->|2. 即座に完了| WB1
+        WB_Cache -.->|3. 非同期書込| WB_DB[DB]
+    end
+
+    style CacheAside fill:#e1f5ff,stroke:#01579b
+    style ReadThrough fill:#e8f5e9,stroke:#1b5e20
+    style WriteThrough fill:#fff3e0,stroke:#e65100
+    style WriteBack fill:#fce4ec,stroke:#880e4f
+```
+
+| パターン | 読み取り | 書き込み | 整合性 | 複雑さ |
+|---------|---------|---------|-------|-------|
+| **Cache-Aside** | アプリが制御 | DB→キャッシュ削除 | △ | 低 |
+| **Read-Through** | キャッシュが代行 | N/A | ○ | 中 |
+| **Write-Through** | N/A | 同期的 | ◎ | 中 |
+| **Write-Back** | N/A | 非同期的 | △ | 高 |
+
+---
+
 ### 1. Cache-Aside（Lazy Loading）
 
 最も一般的なパターン。アプリケーションがキャッシュを管理します。
 
-```
-【読み取り】
-1. キャッシュを確認
-2. あれば返す
-3. なければDBから取得してキャッシュに保存
+#### 処理フロー
 
-【書き込み】
-1. DBを更新
-2. キャッシュを削除（または更新）
+```mermaid
+sequenceDiagram
+    participant App as アプリケーション
+    participant Cache as キャッシュ
+    participant DB as データベース
+
+    Note over App,DB: 【読み取り（Cache Hit）】
+    App->>Cache: 1. GET key
+    Cache-->>App: 2. データ返却（ヒット）
+
+    Note over App,DB: 【読み取り（Cache Miss）】
+    App->>Cache: 1. GET key
+    Cache-->>App: 2. NULL（ミス）
+    App->>DB: 3. SELECT
+    DB-->>App: 4. データ返却
+    App->>Cache: 5. SET key, TTL
+    Cache-->>App: 6. OK
+
+    Note over App,DB: 【書き込み】
+    App->>DB: 1. UPDATE
+    DB-->>App: 2. OK
+    App->>Cache: 3. DELETE key
+    Cache-->>App: 4. OK
 ```
+
+**設計ポイント：**
+- 書き込み時は**キャッシュ削除**（更新ではない）が基本
+  - 理由：更新だとレースコンディションで古いデータが残る可能性
+- 次回読み取り時に最新データがキャッシュされる（Lazy Loading）
 
 ```python
 def get_user(user_id):
@@ -637,12 +705,30 @@ def update_user(user_id, data):
 
 書き込み時に、DBとキャッシュを同時に更新します。
 
+#### 処理フロー
+
+```mermaid
+sequenceDiagram
+    participant App as アプリケーション
+    participant Cache as キャッシュ
+    participant DB as データベース
+
+    Note over App,DB: 【書き込み（同期的）】
+    App->>Cache: 1. SET key, value
+    Cache-->>App: 2. OK
+    Cache->>DB: 3. UPDATE（同期）
+    DB-->>Cache: 4. OK
+    Cache-->>App: 5. 書き込み完了
+
+    Note over App,DB: 【読み取り（常にヒット）】
+    App->>Cache: 1. GET key
+    Cache-->>App: 2. データ返却（常に最新）
 ```
-【書き込み】
-1. キャッシュを更新
-2. DBを更新（同期的に）
-3. 両方成功したら完了
-```
+
+**設計ポイント：**
+- キャッシュとDBの**整合性が常に保たれる**
+- 書き込みがDBの速度に律速される（遅い）
+- トランザクション管理が重要
 
 ```python
 def update_user(user_id, data):
@@ -672,11 +758,36 @@ def update_user(user_id, data):
 
 書き込みをキャッシュに行い、DBへは非同期で反映します。
 
+#### 処理フロー
+
+```mermaid
+sequenceDiagram
+    participant App as アプリケーション
+    participant Cache as キャッシュ
+    participant Queue as 書込キュー
+    participant Worker as バックグラウンドWorker
+    participant DB as データベース
+
+    Note over App,DB: 【書き込み（非同期）】
+    App->>Cache: 1. SET key, value
+    Cache-->>App: 2. OK（即座に完了）
+    Cache->>Queue: 3. キューに追加
+
+    Note over App,DB: 【バックグラウンド処理】
+    Worker->>Queue: 定期的にチェック
+    Queue-->>Worker: 書込データ取得
+    Worker->>DB: UPDATE
+    DB-->>Worker: OK
+
+    Note over App,DB: 【読み取り】
+    App->>Cache: GET key
+    Cache-->>App: 最新データ返却
 ```
-【書き込み】
-1. キャッシュを更新（即座に完了）
-2. バックグラウンドでDBに反映
-```
+
+**設計ポイント：**
+- 書き込みが**超高速**（キャッシュ速度）
+- キャッシュクラッシュ時にデータロスリスク
+- DBへの書き込みをバッチ化できる（効率的）
 
 ```python
 import asyncio
@@ -712,13 +823,35 @@ async def background_writer():
 
 キャッシュがDBからの読み取りを代行します。
 
-```
-【読み取り】
-1. キャッシュにリクエスト
-2. キャッシュがDBから取得して返す
+#### 処理フロー
+
+```mermaid
+sequenceDiagram
+    participant App as アプリケーション
+    participant Cache as キャッシュ（loader付き）
+    participant DB as データベース
+
+    Note over App,DB: 【読み取り（Cache Hit）】
+    App->>Cache: GET key
+    Cache-->>App: データ返却
+
+    Note over App,DB: 【読み取り（Cache Miss）】
+    App->>Cache: GET key
+    Note over Cache: キャッシュミス検知
+    Cache->>DB: SELECT（自動）
+    DB-->>Cache: データ返却
+    Note over Cache: 自動でキャッシュに保存
+    Cache-->>App: データ返却
 ```
 
-Cache-Asideとの違いは、**キャッシュがデータ取得ロジックを持つ** 点です。
+**Cache-Asideとの違い：**
+
+| 項目 | Cache-Aside | Read-Through |
+|-----|------------|--------------|
+| DB取得ロジック | アプリが実装 | キャッシュが実装 |
+| キャッシュミス時 | アプリが明示的にDBアクセス | キャッシュが自動でDBアクセス |
+| 実装場所 | アプリケーション層 | キャッシュ層 |
+| 柔軟性 | 高い | 低い |
 
 ```python
 class ReadThroughCache:
@@ -740,7 +873,58 @@ user = cache.get("user:1234")
 
 ## TTL（Time To Live）の設計
 
-### 基本的な考え方
+### キャッシュエビクション戦略
+
+キャッシュが満杯になったとき、どのデータを削除するかの戦略です。
+
+```mermaid
+graph TB
+    subgraph TTL["TTL（Time To Live）"]
+        TTL_Start[キャッシュ保存]
+        TTL_Time[時間経過]
+        TTL_Expire[期限切れ]
+        TTL_Delete[自動削除]
+
+        TTL_Start --> TTL_Time
+        TTL_Time --> TTL_Expire
+        TTL_Expire --> TTL_Delete
+    end
+
+    subgraph LRU["LRU（Least Recently Used）"]
+        LRU_Cache["キャッシュ: A→B→C→D"]
+        LRU_Access[Bにアクセス]
+        LRU_Move["B→C→D→A"]
+        LRU_Full[満杯時]
+        LRU_Evict[先頭Aを削除]
+
+        LRU_Cache --> LRU_Access
+        LRU_Access --> LRU_Move
+        LRU_Move --> LRU_Full
+        LRU_Full --> LRU_Evict
+    end
+
+    subgraph LFU["LFU（Least Frequently Used）"]
+        LFU_Track["アクセス回数を記録<br/>A:10回 B:5回 C:3回 D:1回"]
+        LFU_Full[満杯時]
+        LFU_Evict["最少回数Dを削除"]
+
+        LFU_Track --> LFU_Full
+        LFU_Full --> LFU_Evict
+    end
+
+    style TTL fill:#e1f5ff,stroke:#01579b
+    style LRU fill:#e8f5e9,stroke:#1b5e20
+    style LFU fill:#fff3e0,stroke:#e65100
+```
+
+| 戦略 | 削除対象 | メリット | デメリット | 用途 |
+|-----|---------|---------|----------|------|
+| **TTL** | 期限切れ | シンプル | 古くても使われるデータも削除 | 一般的 |
+| **LRU** | 最も古くアクセス | バランス良い | 実装がやや複雑 | Redis default |
+| **LFU** | 最も使用頻度低い | 人気データを保持 | 新規データが削除されやすい | 特殊用途 |
+| **FIFO** | 最も古く追加 | 実装簡単 | アクセス頻度無視 | 非推奨 |
+
+### TTLの決め方
 
 ```python
 # TTLの決め方
@@ -832,13 +1016,50 @@ cache.set(cache_key("user:1234"), user_data)
 
 **問題：** キャッシュが切れた瞬間に、大量のリクエストが同時にDBに殺到する
 
-```
-キャッシュ切れ
-     ↓
-Request 1 → キャッシュミス → DB
-Request 2 → キャッシュミス → DB  → DBに負荷集中
-Request 3 → キャッシュミス → DB
-     :
+#### 問題の可視化
+
+```mermaid
+graph TB
+    subgraph Problem["❌ 問題：スタンピード発生"]
+        P_Time[TTL期限切れ]
+        P_R1[Request 1]
+        P_R2[Request 2]
+        P_R3[Request 3]
+        P_Cache1[キャッシュ<br/>ミス]
+        P_Cache2[キャッシュ<br/>ミス]
+        P_Cache3[キャッシュ<br/>ミス]
+        P_DB[(DB)]
+
+        P_Time --> P_R1 & P_R2 & P_R3
+        P_R1 --> P_Cache1 --> P_DB
+        P_R2 --> P_Cache2 --> P_DB
+        P_R3 --> P_Cache3 --> P_DB
+    end
+
+    subgraph Solution["✅ 対策：ロック使用"]
+        S_Time[TTL期限切れ]
+        S_R1[Request 1]
+        S_R2[Request 2]
+        S_R3[Request 3]
+        S_Lock{ロック取得}
+        S_DB[(DB)]
+        S_Wait[待機]
+        S_Cache[キャッシュ更新]
+
+        S_Time --> S_R1 & S_R2 & S_R3
+        S_R1 --> S_Lock
+        S_R2 --> S_Lock
+        S_R3 --> S_Lock
+        S_Lock -->|成功| S_DB
+        S_Lock -->|失敗| S_Wait
+        S_DB --> S_Cache
+        S_Cache --> S_Wait
+    end
+
+    style Problem fill:#ffebee,stroke:#c62828
+    style Solution fill:#e8f5e9,stroke:#2e7d32
+    style P_DB fill:#ff5252,color:#fff
+    style S_DB fill:#4caf50,color:#fff
 ```
 
 **対策1：ロック**
@@ -896,6 +1117,54 @@ def get_with_early_recompute(key: str, beta: float = 1.0):
 
 **問題：** 存在しないキーへのリクエストが毎回DBに到達する
 
+#### 問題と対策の可視化
+
+```mermaid
+graph TB
+    subgraph Attack["❌ 攻撃：存在しないIDで攻撃"]
+        A_Req1[GET /user/999999]
+        A_Req2[GET /user/888888]
+        A_Req3[GET /user/777777]
+        A_Cache[キャッシュ<br/>全てミス]
+        A_DB[(DB<br/>全てNULL)]
+
+        A_Req1 --> A_Cache
+        A_Req2 --> A_Cache
+        A_Req3 --> A_Cache
+        A_Cache --> A_DB
+    end
+
+    subgraph Defense1["✅ 対策1：ネガティブキャッシュ"]
+        D1_Req[GET /user/999999]
+        D1_Cache{キャッシュ確認}
+        D1_Null["NULL<br/>をキャッシュ"]
+        D1_Return[NULL返却]
+
+        D1_Req --> D1_Cache
+        D1_Cache -->|ヒット| D1_Return
+        D1_Cache -->|ミス| D1_Null
+        D1_Null --> D1_Return
+    end
+
+    subgraph Defense2["✅ 対策2：Bloom Filter"]
+        D2_Req[GET /user/123]
+        D2_Bloom{Bloom Filter<br/>存在チェック}
+        D2_Return[即座にNULL]
+        D2_Cache[キャッシュ確認]
+
+        D2_Req --> D2_Bloom
+        D2_Bloom -->|存在しない| D2_Return
+        D2_Bloom -->|存在する可能性| D2_Cache
+    end
+
+    style Attack fill:#ffebee,stroke:#c62828
+    style Defense1 fill:#e8f5e9,stroke:#2e7d32
+    style Defense2 fill:#e1f5fe,stroke:#0277bd
+    style A_DB fill:#ff5252,color:#fff
+```
+
+**攻撃例：**
+
 ```python
 # 悪者がランダムなIDでリクエスト
 GET /user/999999999  # 存在しない → 毎回DB
@@ -948,23 +1217,93 @@ def get_user(user_id):
 
 **問題：** 大量のキャッシュが同時に期限切れになり、DBに負荷が集中
 
-**対策：TTLにジッター**
+#### 問題と対策の可視化
+
+```mermaid
+graph TB
+    subgraph Problem["❌ 問題：同時期限切れ"]
+        P_T0[時刻 T0<br/>一斉キャッシュ保存<br/>TTL=3600s]
+        P_T3600[時刻 T0+3600s<br/>一斉期限切れ]
+        P_Burst[大量リクエスト<br/>一斉にDB直撃]
+        P_DB[(DB<br/>過負荷)]
+
+        P_T0 --> P_T3600
+        P_T3600 --> P_Burst
+        P_Burst --> P_DB
+    end
+
+    subgraph Solution["✅ 対策：TTLジッター"]
+        S_T0[時刻 T0<br/>キャッシュ保存]
+        S_TTL1[TTL=3300s]
+        S_TTL2[TTL=3600s]
+        S_TTL3[TTL=3900s]
+        S_Spread[期限切れが分散]
+        S_DB[(DB<br/>負荷分散)]
+
+        S_T0 --> S_TTL1 & S_TTL2 & S_TTL3
+        S_TTL1 & S_TTL2 & S_TTL3 --> S_Spread
+        S_Spread --> S_DB
+    end
+
+    style Problem fill:#ffebee,stroke:#c62828
+    style Solution fill:#e8f5e9,stroke:#2e7d32
+    style P_DB fill:#ff5252,color:#fff
+    style S_DB fill:#4caf50,color:#fff
+```
+
+**対策：TTLにジッター（揺らぎ）を追加**
 
 ```python
+import random
+
 # 全てのキャッシュが同時に切れないよう、TTLをばらけさせる
 base_ttl = 3600
-jitter = random.randint(-300, 300)  # ±5分
+jitter = random.randint(-300, 300)  # ±5分（約±8%）
 cache.set(key, value, ttl=base_ttl + jitter)
+
+# 例：
+# Key1: TTL=3300s（55分）
+# Key2: TTL=3600s（60分）
+# Key3: TTL=3900s（65分）
+# → 期限切れが10分間に分散
 ```
 
 ### 4. ホットキー問題
 
 **問題：** 特定のキーにアクセスが集中し、そのキーを持つノードがボトルネックに
 
-```
-人気商品のキャッシュ
-     ↓
-全リクエストが1つのRedisノードに集中
+#### 問題と対策の可視化
+
+```mermaid
+graph TB
+    subgraph Problem["❌ 問題：ホットキー集中"]
+        P_App1[App Server 1]
+        P_App2[App Server 2]
+        P_App3[App Server 3]
+        P_Redis[Redis Node 1<br/>product:popular<br/>⚠️ 過負荷]
+        P_Redis2[Redis Node 2<br/>アイドル]
+        P_Redis3[Redis Node 3<br/>アイドル]
+
+        P_App1 --> P_Redis
+        P_App2 --> P_Redis
+        P_App3 --> P_Redis
+    end
+
+    subgraph Solution["✅ 対策：多層キャッシュ"]
+        S_App1[App Server 1]
+        S_Local1[ローカル<br/>キャッシュ<br/>TTL=10s]
+        S_Redis[Redis<br/>TTL=1h]
+        S_DB[(DB)]
+
+        S_App1 --> S_Local1
+        S_Local1 -->|ミス| S_Redis
+        S_Redis -->|ミス| S_DB
+    end
+
+    style Problem fill:#ffebee,stroke:#c62828
+    style Solution fill:#e8f5e9,stroke:#2e7d32
+    style P_Redis fill:#ff5252,color:#fff
+    style S_Local1 fill:#4caf50,color:#fff
 ```
 
 **対策1：ローカルキャッシュの併用**
@@ -1011,6 +1350,56 @@ def get_from_replica(key):
 ## 実践的なキャッシュ設計
 
 ### ケース1：ECサイトの商品ページ
+
+階層的なキャッシュで、データの特性に応じたTTLを設定します。
+
+#### 階層的キャッシュ構成
+
+```mermaid
+graph TB
+    User[ユーザー]
+    Browser[ブラウザキャッシュ<br/>静的リソース<br/>TTL: 1年]
+    CDN[CDN<br/>画像・CSS・JS<br/>TTL: 1日]
+    Nginx[Nginx<br/>HTMLページ<br/>TTL: 5分]
+    App[アプリケーション]
+    Redis[Redis]
+
+    subgraph Redis_Data["Redisキャッシュ層"]
+        Product[商品基本情報<br/>TTL: 5分]
+        Reviews[レビュー<br/>TTL: 10分]
+        Related[関連商品<br/>TTL: 1時間]
+        Inventory[在庫数<br/>TTL: 30秒]
+    end
+
+    DB[(PostgreSQL)]
+
+    User --> Browser
+    Browser -->|ミス| CDN
+    CDN -->|ミス| Nginx
+    Nginx -->|ミス| App
+    App --> Product & Reviews & Related & Inventory
+    Product & Reviews & Related & Inventory -->|ミス| DB
+
+    style Browser fill:#e1f5ff
+    style CDN fill:#e8f5e9
+    style Nginx fill:#fff3e0
+    style Redis_Data fill:#fce4ec
+    style Inventory fill:#ffeb3b
+```
+
+**TTL設計の根拠：**
+
+| データ | TTL | 理由 |
+|-------|-----|------|
+| 静的リソース | 1年 | ほぼ不変、バージョニングで管理 |
+| 商品画像 | 1日 | 頻繁には変わらない |
+| HTMLページ | 5分 | 価格・在庫変更に対応 |
+| 商品基本情報 | 5分 | ある程度の遅延許容 |
+| レビュー | 10分 | リアルタイム性低い |
+| 関連商品 | 1時間 | ほぼ変わらない |
+| 在庫数 | 30秒 | **最も鮮度が重要** |
+
+#### 実装例
 
 ```python
 # 階層的なキャッシュ設計
@@ -1156,6 +1545,61 @@ def get_with_logging(key: str):
 ---
 
 ## キャッシュを入れる前に考えること
+
+### キャッシュ戦略選定フローチャート
+
+```mermaid
+flowchart TD
+    Start([キャッシュ導入検討])
+    Q1{パフォーマンス<br/>問題あり？}
+    Optimize[最適化実施<br/>インデックス追加<br/>N+1解消<br/>接続プール設定]
+
+    Q2{データ種類は？}
+    Static[静的コンテンツ<br/>画像/CSS/JS]
+    Dynamic[動的コンテンツ<br/>頻繁に変わらない]
+    UserSpec[ユーザー固有<br/>セッション/カート]
+
+    L_CDN[CDN層<br/>CloudFlare<br/>CloudFront]
+    L_Proxy[プロキシ層<br/>Nginx<br/>Varnish]
+    L_App[アプリ層<br/>Redis<br/>Memcached]
+
+    Q3{整合性要件？}
+    Strong[強整合性<br/>金融/在庫]
+    Eventual[結果整合性<br/>商品/レビュー]
+    Speed[速度最優先<br/>ログ/分析]
+
+    P_WT[Write-Through]
+    P_CA[Cache-Aside]
+    P_WB[Write-Back]
+
+    Q4{TTL設定}
+    TTL_S[短TTL: 30s-5m<br/>在庫/価格]
+    TTL_M[中TTL: 5m-1h<br/>商品/ユーザー]
+    TTL_L[長TTL: 1h-1d<br/>設定/マスタ]
+
+    Monitor[監視設定<br/>ヒット率90%以上<br/>レスポンス監視<br/>メモリ使用率]
+
+    Start --> Q1
+    Q1 -->|No| Optimize
+    Q1 -->|Yes| Q2
+    Q2 --> Static --> L_CDN
+    Q2 --> Dynamic --> L_Proxy
+    Q2 --> UserSpec --> L_App
+    L_CDN & L_Proxy & L_App --> Q3
+    Q3 --> Strong --> P_WT
+    Q3 --> Eventual --> P_CA
+    Q3 --> Speed --> P_WB
+    P_WT & P_CA & P_WB --> Q4
+    Q4 --> TTL_S & TTL_M & TTL_L
+    TTL_S & TTL_M & TTL_L --> Monitor
+
+    style Start fill:#e3f2fd
+    style Optimize fill:#fff3e0
+    style L_CDN fill:#e8f5e9
+    style L_Proxy fill:#e8f5e9
+    style L_App fill:#e8f5e9
+    style Monitor fill:#c8e6c9
+```
 
 ### チェックリスト
 
