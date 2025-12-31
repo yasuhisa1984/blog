@@ -1,5 +1,5 @@
 ---
-title: "Producer と Consumer を分けると、なぜ「責任境界」が明確になるのか"
+title: "非同期処理の責任境界：障害時の「犯人探し」をなくす設計思想"
 date: 2024-12-14
 draft: false
 categories: ["システム設計"]
@@ -63,16 +63,55 @@ flowchart LR
 
 典型的な例は、1つのAPI呼び出しの中で「全部やろうとする」設計だ。
 
-```
-注文API
-├── 注文データをDBに保存
-├── 在庫を引き当てる
-├── 決済処理を実行
-├── 確認メールを送信
-└── 分析用ログを記録
+```mermaid
+flowchart LR
+    subgraph Monolithic[" "]
+        direction TB
+        MonoTitle["❌ 全部やる設計"]
+        MonoAPI["注文API"]
+        MonoStep1["1. DBに保存"]
+        MonoStep2["2. 在庫引当"]
+        MonoStep3["3. 決済処理"]
+        MonoStep4["4. メール送信"]
+        MonoStep5["5. ログ記録"]
+        MonoProblem["❓ どこまで成功なら<br/>この処理は成功？"]
+
+        MonoTitle ~~~ MonoAPI
+        MonoAPI --> MonoStep1 --> MonoStep2 --> MonoStep3 --> MonoStep4 --> MonoStep5
+        MonoStep5 -.-> MonoProblem
+
+        style MonoTitle fill:#ffebee,stroke:#c62828
+        style MonoProblem fill:#fff3e0,stroke:#f57c00
+    end
+
+    subgraph Separated[" "]
+        direction TB
+        SepTitle["✅ 分離設計"]
+        Producer["📤 Producer<br/><code style='color: white'>注文API</code>"]
+        Queue["📬 Queue"]
+        Consumer1["📥 Consumer<br/><code style='color: white'>在庫引当</code>"]
+        Consumer2["📥 Consumer<br/><code style='color: white'>メール送信</code>"]
+        Consumer3["📥 Consumer<br/><code style='color: white'>ログ記録</code>"]
+        SepSuccess["✓ 責任完了が明確"]
+
+        SepTitle ~~~ Producer
+        Producer -->|1. DBに保存<br/>2. キュー投入| Queue
+        Queue --> Consumer1
+        Queue --> Consumer2
+        Queue --> Consumer3
+        Producer -.->|ここで成功| SepSuccess
+
+        style SepTitle fill:#e8f5e9,stroke:#2e7d32
+        style Producer fill:#e3f2fd
+        style Queue fill:#fff3e0
+        style Consumer1 fill:#e8f5e9
+        style Consumer2 fill:#e8f5e9
+        style Consumer3 fill:#e8f5e9
+        style SepSuccess fill:#e8f5e9,stroke:#2e7d32
+    end
 ```
 
-一見、シンプルで分かりやすい。処理の流れが見える。
+一見、左側の設計はシンプルで分かりやすい。処理の流れが見える。
 
 でも、これには致命的な問題がある。
 
@@ -103,11 +142,29 @@ flowchart LR
 
 さっきの注文処理で言えば、こう変わる：
 
-```
-注文API（Producer）
-├── 注文データをDBに保存
-└── 「注文が作成された」というメッセージをキューに投入
-    └── ここで責任完了 ✓
+```mermaid
+sequenceDiagram
+    participant User as 👤 ユーザー
+    participant API as 📤 注文API<br/>(Producer)
+    participant DB as 💾 DB
+    participant Queue as 📬 Queue
+    participant Consumer as 📥 Consumer
+
+    rect rgba(173, 216, 230, 0.2)
+        Note over User,Queue: Producer の責任範囲
+        User->>API: POST /orders
+        API->>DB: 注文データ保存
+        DB-->>API: 保存完了
+        API->>Queue: メッセージ投入<br/><code style='color: white'>{"orderId": 12345}</code>
+        Queue-->>API: 投入完了
+        API-->>User: 200 OK<br/><code style='color: white'>注文を受付けました</code>
+        Note over API,Queue: ✅ ここで責任完了
+    end
+
+    Note over Consumer: Producer の責任外
+    Queue->>Consumer: メッセージ配信
+    Consumer->>Consumer: 在庫引当処理
+    Note over Consumer: 失敗してもProducerに影響なし
 ```
 
 注文APIの責任は、「注文データを保存し、後続処理のためのメッセージをキューに入れること」だけになる。
@@ -161,6 +218,44 @@ Dead Letter Queue とは、「処理できなかったメッセージの墓場�
 
 この分離があるから、障害時に「どこが悪いのか」が明確になる。
 
+### 障害時の切り分けフロー
+
+```mermaid
+flowchart TB
+    Start["🚨 障害発生<br/>処理が完了していない"]
+    CheckQueue{📬 キューに<br/>メッセージは<br/>入っているか？}
+
+    ProducerProblem["❌ Producer側の問題"]
+    ProducerCheck1["🔍 Producer のログ確認"]
+    ProducerCheck2["🔍 DBに注文データは保存されているか？"]
+    ProducerCheck3["🔍 キュー投入処理でエラーは？"]
+    ProducerAction["🔧 Producer の修正・再起動<br/>メッセージを手動投入"]
+
+    ConsumerProblem["❌ Consumer側の問題"]
+    ConsumerCheck1["🔍 Consumer は起動しているか？"]
+    ConsumerCheck2["🔍 Consumer のログにエラーは？"]
+    ConsumerCheck3["🔍 Dead Letter Queue を確認"]
+    ConsumerAction["🔧 Consumer の修正・再起動<br/>DLQのメッセージを再処理"]
+
+    ProducerOK["✅ Producer は正常<br/>責任を果たしている"]
+
+    Start --> CheckQueue
+    CheckQueue -->|入っている| ProducerOK
+    ProducerOK --> ConsumerProblem
+    CheckQueue -->|入っていない| ProducerProblem
+
+    ProducerProblem --> ProducerCheck1 --> ProducerCheck2 --> ProducerCheck3 --> ProducerAction
+    ConsumerProblem --> ConsumerCheck1 --> ConsumerCheck2 --> ConsumerCheck3 --> ConsumerAction
+
+    style Start fill:#ffebee,stroke:#c62828
+    style CheckQueue fill:#fff3e0,stroke:#f57c00
+    style ProducerOK fill:#e8f5e9,stroke:#2e7d32
+    style ProducerProblem fill:#ffebee,stroke:#c62828
+    style ConsumerProblem fill:#ffebee,stroke:#c62828
+    style ProducerAction fill:#e3f2fd,stroke:#1976d2
+    style ConsumerAction fill:#e3f2fd,stroke:#1976d2
+```
+
 ---
 
 ## 冪等性：「何度やっても同じ結果」という安心感
@@ -187,7 +282,58 @@ Consumer が途中で落ちたとき、そのメッセージはどうなるか�
 2. **処理済みかどうかを確認してから実行する**
 3. **または、処理結果を「上書き」する形で設計する**
 
+### 冪等性の実装パターン：同じメッセージが2回来たら？
+
+```mermaid
+flowchart LR
+    subgraph NonIdempotent[" "]
+        direction TB
+        NTitle["❌ 冪等でない実装"]
+        NMsg1["📬 メッセージ1回目<br/><code style='color: white'>orderId: 12345</code>"]
+        NProcess1["在庫を1つ減らす"]
+        NStock1["在庫: 100 → 99"]
+        NMsg2["📬 メッセージ2回目<br/><code style='color: white'>同じorderId: 12345</code>"]
+        NProcess2["在庫を1つ減らす"]
+        NStock2["在庫: 99 → 98"]
+        NProblem["💥 二重引当！"]
+
+        NTitle ~~~ NMsg1
+        NMsg1 --> NProcess1 --> NStock1
+        NStock1 --> NMsg2 --> NProcess2 --> NStock2
+        NStock2 -.-> NProblem
+
+        style NTitle fill:#ffebee,stroke:#c62828
+        style NProblem fill:#ffebee,stroke:#c62828
+    end
+
+    subgraph Idempotent[" "]
+        direction TB
+        ITitle["✅ 冪等な実装"]
+        IMsg1["📬 メッセージ1回目<br/><code style='color: white'>orderId: 12345</code>"]
+        ICheck1{処理済み？}
+        IProcess1["在庫を1つ減らす<br/>引当済みマーク"]
+        IStock1["在庫: 100 → 99"]
+        IMsg2["📬 メッセージ2回目<br/><code style='color: white'>同じorderId: 12345</code>"]
+        ICheck2{処理済み？}
+        ISkip["スキップ"]
+        IStock2["在庫: 99 のまま"]
+        ISafe["✅ 安全！"]
+
+        ITitle ~~~ IMsg1
+        IMsg1 --> ICheck1
+        ICheck1 -->|未処理| IProcess1 --> IStock1
+        IStock1 --> IMsg2 --> ICheck2
+        ICheck2 -->|処理済み| ISkip --> IStock2
+        IStock2 -.-> ISafe
+
+        style ITitle fill:#e8f5e9,stroke:#2e7d32
+        style ISafe fill:#e8f5e9,stroke:#2e7d32
+    end
 ```
+
+実装例：
+
+```javascript
 // 冪等な在庫引当の例
 function 在庫引当(注文ID) {
     if (すでに引当済み(注文ID)) {
@@ -214,29 +360,67 @@ function 在庫引当(注文ID) {
 
 たとえば、こんな Consumer を見たことがある：
 
-```
-注文処理Consumer（悪い例）
-├── 注文データを検証する
-├── 在庫があるか確認する
-├── 在庫がなければ代替品を提案する
-├── 顧客の購入履歴を確認してレコメンドを追加する
-├── 決済処理を実行する
-└── 各種通知を送信する
+```mermaid
+flowchart LR
+    subgraph Bad[" "]
+        direction TB
+        BadTitle["❌ 複雑なConsumer（悪い例）"]
+        Queue1["📬 Queue"]
+        BadConsumer["📥 注文処理Consumer<br/><code style='color: white'>全部やる</code>"]
+        Step1["1. データ検証"]
+        Step2["2. 在庫確認"]
+        Step3["3. 代替品提案"]
+        Step4["4. レコメンド"]
+        Step5["5. 決済処理"]
+        Step6["6. 通知送信"]
+        BadProblem["❓ どこかで失敗したら<br/>全部やり直し？"]
+
+        BadTitle ~~~ Queue1
+        Queue1 --> BadConsumer
+        BadConsumer --> Step1 --> Step2 --> Step3 --> Step4 --> Step5 --> Step6
+        Step6 -.-> BadProblem
+
+        style BadTitle fill:#ffebee,stroke:#c62828
+        style BadConsumer fill:#ffebee
+        style BadProblem fill:#fff3e0,stroke:#f57c00
+    end
+
+    subgraph Good[" "]
+        direction TB
+        GoodTitle["✅ シンプルなConsumer（良い例）"]
+        Queue2["📬 Queue"]
+        Consumer1["📥 在庫引当<br/><code style='color: white'>Consumer</code>"]
+        Task1["在庫を引き当てる"]
+        Consumer2["📥 メール送信<br/><code style='color: white'>Consumer</code>"]
+        Task2["メールを送る"]
+        Consumer3["📥 分析ログ<br/><code style='color: white'>Consumer</code>"]
+        Task3["ログを記録する"]
+        GoodBenefit["✅ 1つが失敗しても<br/>他は影響なし"]
+
+        GoodTitle ~~~ Queue2
+        Queue2 --> Consumer1
+        Queue2 --> Consumer2
+        Queue2 --> Consumer3
+        Consumer1 --> Task1
+        Consumer2 --> Task2
+        Consumer3 --> Task3
+        Task1 -.-> GoodBenefit
+        Task2 -.-> GoodBenefit
+        Task3 -.-> GoodBenefit
+
+        style GoodTitle fill:#e8f5e9,stroke:#2e7d32
+        style Consumer1 fill:#e8f5e9
+        style Consumer2 fill:#e8f5e9
+        style Consumer3 fill:#e8f5e9
+        style GoodBenefit fill:#e8f5e9,stroke:#2e7d32
+    end
 ```
 
 これは、さっきの「全部やる API」と同じ問題を Consumer 側で再現しているだけだ。
 
 **Consumer の責任は、できるだけシンプルにすべきだ。**
 
-良い設計では、1つの Consumer は1つの責務だけを持つ：
-
-```
-在庫引当Consumer → 在庫を引き当てるだけ
-メール送信Consumer → メールを送るだけ
-分析ログConsumer → ログを記録するだけ
-```
-
-複数の Consumer が同じメッセージを処理してもいい。それぞれが自分の責任を果たせばいい。
+良い設計では、1つの Consumer は1つの責務だけを持つ。複数の Consumer が同じメッセージを処理してもいい。それぞれが自分の責任を果たせばいい。
 
 この「1 Consumer = 1責務」の原則を守ると、障害の影響範囲も最小限になる。メールサーバーが落ちても、在庫引当には影響しない。分析システムがパンクしても、注文処理は続行できる。
 
