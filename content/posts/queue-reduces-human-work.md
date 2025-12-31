@@ -62,12 +62,58 @@ flowchart TB
 
 キューがないシステムも同じだ。
 
+### 同期処理 vs 非同期処理の決定的な違い
+
+```mermaid
+sequenceDiagram
+    participant U as 👤 ユーザー
+    participant S as システム
+    participant E as 外部サービス
+
+    Note over U,E: ❌ 同期処理（キューなし）
+    U->>S: 請求書作成
+    S->>E: 顧客データ取得
+    Note over U,E: ⏳ 待機中...（5秒）
+    E-->>S: データ返却
+    S->>E: PDF生成依頼
+    Note over U,E: ⏳ 待機中...（20秒）
+    E-->>S: PDF完成
+    S->>E: メール送信
+    Note over U,E: ⏳ 待機中...（3秒）
+    E-->>S: 送信完了
+    S-->>U: 処理完了（合計28秒）
+
+    Note over U: この間、他の仕事ができない
+
+    Note over U,E: ✅ 非同期処理（キューあり）
+    U->>S: 請求書作成
+    S->>S: キューに登録
+    S-->>U: 受付完了（0.1秒）
+    Note over U: 別の作業開始 ✓
+
+    Note over S,E: バックグラウンド処理
+    S->>E: 顧客データ取得
+    E-->>S: データ返却
+    S->>E: PDF生成依頼
+    E-->>S: PDF完成
+    S->>E: メール送信
+    E-->>S: 送信完了
+    S--)U: 📧 処理完了通知
+
+    style U fill:#e3f2fd
+    style S fill:#4caf50,color:#fff
+    style E fill:#ff9800,color:#fff
 ```
-[図のイメージ]
-ユーザー → システム → 外部サービス → システム → ユーザー
-           ↑                              ↓
-           └──── ずっと待っている ─────────┘
-```
+
+**同期処理の問題点：**
+- ユーザーが処理完了まで待機（28秒）
+- エラー発生時に即座に判断を求められる
+- タイムアウトすると最初からやり直し
+
+**非同期処理のメリット：**
+- ユーザーは0.1秒で解放される
+- その間に他の200件の請求書も登録できる
+- エラーは自動リトライ、本当に必要な時だけ人間に通知
 
 ユーザーが「請求書を作成」ボタンを押す。システムは顧客データを取得し、金額を計算し、PDFを生成し、保存する。その間、ユーザーは画面の前で待っている。
 
@@ -121,25 +167,129 @@ PDFの生成には30秒かかるかもしれない。外部サービスとの連
 
 **「人間が判断しなければならない回数」が激減する。**
 
-キューがない世界では、処理の途中で問題が起きるたびに、人間が呼び出される。
+### 判断回数の劇的な削減
 
+```mermaid
+graph TB
+    subgraph Without["❌ キューなし: 200件処理で200回判断"]
+        W_Start[200件開始]
+        W_Loop[1件ずつ処理]
+        W_Error1[エラー発生<br/>👤 再試行？]
+        W_Error2[タイムアウト<br/>👤 続行？]
+        W_Error3[データ不整合<br/>👤 スキップ？]
+        W_Error4[…エラーの度に<br/>👤 判断を要求]
+        W_Result[結果: 195件成功<br/>5件失敗]
+
+        W_Start --> W_Loop
+        W_Loop --> W_Error1 & W_Error2 & W_Error3 & W_Error4
+        W_Error1 & W_Error2 & W_Error3 & W_Error4 --> W_Result
+
+        W_Note["👤 判断回数: 約200回<br/>⏱️ 拘束時間: 2時間<br/>😫 ストレス: MAX"]
+    end
+
+    subgraph With["✅ キューあり: 200件処理で5回判断"]
+        Q_Start[200件をキューに投入]
+        Q_Quick[即座に受付完了]
+        Q_Free[👤 別の作業へ]
+        Q_Process[バックグラウンド処理<br/>自動リトライ3回]
+        Q_DLQ[致命的エラーのみ<br/>失敗キューへ]
+        Q_Notify[📧 完了通知:<br/>195件成功 5件要確認]
+        Q_Review[👤 5件だけ確認]
+
+        Q_Start --> Q_Quick
+        Q_Quick --> Q_Free
+        Q_Start --> Q_Process
+        Q_Process --> Q_DLQ
+        Q_DLQ --> Q_Notify
+        Q_Notify --> Q_Review
+
+        Q_Note["👤 判断回数: 5回<br/>⏱️ 拘束時間: 10分<br/>😊 ストレス: 低"]
+    end
+
+    style Without fill:#ffebee,stroke:#c62828
+    style With fill:#e8f5e9,stroke:#2e7d32
+    style W_Note fill:#fff3e0,stroke:#f57f17
+    style Q_Note fill:#c8e6c9,stroke:#388e3c
+    style Q_Free fill:#4caf50,color:#fff
+```
+
+**キューがない世界：**
+- 処理の途中で問題が起きるたびに人間が呼び出される
 - 「接続がタイムアウトしました」→ 人間が再試行ボタンを押す
 - 「データが不整合です」→ 人間が確認して続行を選ぶ
 - 「外部サービスがエラーを返しました」→ 人間がどうするか決める
+- **200件処理で約200回の判断 = 確認作業員化**
 
-これが1日に何十回も起きると、人間は「確認作業員」になってしまう。
-
-キューがある世界では、こうした「途中の問題」を**自動対処するロジックを組み込みやすい**。
-
+**キューがある世界：**
 - タイムアウト → 自動で再試行（3回まで）
 - 一時的なエラー → 少し待ってから再実行
-- 致命的なエラー → 「失敗リスト」に入れて、後でまとめて人間に報告
+- 致命的なエラー → 「失敗キュー（DLQ）」に入れて、後でまとめて報告
+- **200件処理で5回の判断 = 例外処理のプロ**
 
 ※ もちろん、キューを入れただけでこれらが自動化されるわけではない。リトライ処理やエラーハンドリングは別途実装が必要だ。ただし、キューという「一時的な退避場所」があることで、こうした仕組みを作りやすくなる。
 
 人間が判断するのは、**「自動では解決できなかったもの」だけ**になる。
 
-これが「仕事が減る」の正体だ。100回の確認が、10回のまとめて確認になる。
+これが「仕事が減る」の正体だ。**100回の確認が、10回のまとめて確認になる。**
+
+---
+
+## エラーハンドリング戦略：システムが賢くなる
+
+キューの真価は、エラーハンドリングの設計にある。
+
+### 自動リトライとDead Letter Queue（DLQ）
+
+```mermaid
+flowchart TD
+    Start[メッセージ受信]
+    Process{処理実行}
+    Success[✅ 成功]
+    TempError{一時的エラー？}
+    RetryCount{リトライ回数}
+    Wait[待機<br/>Exponential Backoff]
+    Retry[キューに戻す]
+    DLQ[(Dead Letter Queue<br/>失敗キュー)]
+    Alert[📧 人間に通知<br/>まとめて報告]
+
+    Start --> Process
+    Process -->|成功| Success
+    Process -->|失敗| TempError
+    TempError -->|タイムアウト<br/>接続エラー| RetryCount
+    TempError -->|致命的エラー<br/>データ不正| DLQ
+    RetryCount -->|1回目| Wait
+    RetryCount -->|2回目| Wait
+    RetryCount -->|3回目| Wait
+    Wait --> Retry
+    Retry --> Process
+    RetryCount -->|3回超過| DLQ
+    DLQ --> Alert
+
+    style Success fill:#4caf50,color:#fff
+    style DLQ fill:#ff9800,color:#fff
+    style Alert fill:#f44336,color:#fff
+    style Wait fill:#2196f3,color:#fff
+```
+
+**自動リトライの例：**
+- **1回目失敗**: 1秒待ってリトライ
+- **2回目失敗**: 2秒待ってリトライ（Exponential Backoff）
+- **3回目失敗**: 4秒待ってリトライ
+- **3回超過**: DLQに移動 → 人間に通知
+
+**エラーの種類別対応：**
+
+| エラー種別 | 自動対応 | 人間の介入 |
+|-----------|---------|----------|
+| タイムアウト | 自動リトライ3回 | 3回失敗後のみ |
+| 接続エラー | 自動リトライ3回 | 3回失敗後のみ |
+| データ不正 | DLQに即移動 | 即時通知（まとめて） |
+| 権限エラー | DLQに即移動 | 即時通知（まとめて） |
+
+**人間の仕事：**
+- リトライで解決できない「本質的な問題」だけを見る
+- 1日の終わりに「失敗リスト」をまとめてレビュー
+- パターンを見つけて恒久対策を打つ
 
 ---
 
@@ -147,24 +297,67 @@ PDFの生成には30秒かかるかもしれない。外部サービスとの連
 
 ### 例1：請求書の一括作成
 
-**キューなし：**
-```
-200件の請求書を作成
-→ 1件ずつ処理
-→ 途中でエラーが起きるたびに画面に表示
-→ 人間が「スキップ」か「再試行」か選ぶ
-→ 2時間かかる（待ち時間 + 判断時間）
+```mermaid
+graph TB
+    subgraph NoQueue["❌ キューなし: 2時間拘束"]
+        NQ_Start[👤 200件処理開始]
+        NQ_Loop[1件ずつ処理]
+        NQ_Wait[⏳ 待機...]
+        NQ_Error[❌ エラー発生]
+        NQ_Human[👤 スキップ？再試行？]
+        NQ_Repeat[次の件へ...]
+        NQ_Done[完了<br/>195件成功 5件失敗]
+
+        NQ_Start --> NQ_Loop
+        NQ_Loop --> NQ_Wait
+        NQ_Wait --> NQ_Error
+        NQ_Error --> NQ_Human
+        NQ_Human --> NQ_Repeat
+        NQ_Repeat --> NQ_Loop
+        NQ_Loop --> NQ_Done
+
+        NQ_Note["👤 人間: 2時間画面前<br/>😫 判断200回"]
+    end
+
+    subgraph WithQueue["✅ キューあり: 10分だけ対応"]
+        WQ_Start[👤 200件投入]
+        WQ_Quick[✓ 受付完了 0.1秒]
+        WQ_Free[👤 別の作業開始]
+        WQ_BG[⚙️ バックグラウンド処理<br/>自動リトライ]
+        WQ_Notify[📧 通知: 195成功 5失敗]
+        WQ_Review[👤 5件だけ確認<br/>10分で完了]
+
+        WQ_Start --> WQ_Quick
+        WQ_Quick --> WQ_Free
+        WQ_Start -.-> WQ_BG
+        WQ_BG -.-> WQ_Notify
+        WQ_Notify --> WQ_Review
+
+        WQ_Note["👤 人間: 10分だけ<br/>😊 判断5回"]
+    end
+
+    style NoQueue fill:#ffebee,stroke:#c62828
+    style WithQueue fill:#e8f5e9,stroke:#2e7d32
+    style NQ_Note fill:#fff3e0
+    style WQ_Note fill:#c8e6c9
+    style WQ_Free fill:#4caf50,color:#fff
 ```
 
+**キューなし：**
+- 200件の請求書を1件ずつ処理
+- 途中でエラーが起きるたびに画面に表示
+- 人間が「スキップ」か「再試行」か選ぶ
+- **2時間かかる（待ち時間 + 判断時間）**
+- 判断回数: 約200回
+
 **キューあり：**
-```
-200件の請求書作成依頼をキューに投入
-→「受け付けました」と表示
-→ 人間は別の作業へ
-→ バックグラウンドで処理（エラーは自動リトライ）
-→ 完了後「195件成功、5件要確認」と通知
-→ 人間は5件だけ対処する
-```
+- 200件の請求書作成依頼をキューに投入
+- 「受け付けました」と表示（0.1秒）
+- 人間は別の作業へ
+- バックグラウンドで処理（エラーは自動リトライ）
+- 完了後「195件成功、5件要確認」と通知
+- **人間は5件だけ対処する（10分）**
+- 判断回数: 5回
 
 処理時間は同じかもしれない。でも**人間が拘束される時間**が圧倒的に違う。
 
@@ -172,21 +365,58 @@ PDFの生成には30秒かかるかもしれない。外部サービスとの連
 
 大量データをCSVやPDFにエクスポートする機能。
 
+```mermaid
+sequenceDiagram
+    participant U as 👤 ユーザー
+    participant S as システム
+    participant Q as Queue
+    participant W as Worker
+    participant Storage as ストレージ
+
+    Note over U,Storage: ❌ キューなし: 3分待機
+    U->>S: エクスポートボタン
+    S->>S: データ抽出（1分）
+    Note over U: ⏳ 画面固まる...
+    S->>S: PDF生成（2分）
+    Note over U: ⏳ まだ固まってる...
+    S-->>U: ファイルダウンロード
+    Note over U: ブラウザ閉じたら<br/>最初からやり直し
+
+    Note over U,Storage: ✅ キューあり: 0秒待機
+    U->>S: エクスポートボタン
+    S->>Q: ジョブ登録
+    S-->>U: 📧 完了したら通知します（0.1秒）
+    Note over U: 別の作業開始 ✓
+
+    Note over Q,Storage: バックグラウンド処理
+    W->>Q: ジョブ取得
+    W->>W: データ抽出（1分）
+    W->>W: PDF生成（2分）
+    W->>Storage: ファイル保存
+    Storage-->>W: 保存完了
+    W--)U: 📧 ダウンロード可能<br/>24時間有効
+
+    style U fill:#e3f2fd
+    style S fill:#4caf50,color:#fff
+    style W fill:#2196f3,color:#fff
+    style Storage fill:#ff9800,color:#fff
+```
+
 **キューなし：**
 - 「エクスポート」ボタンを押す
 - 画面がフリーズしたように見える
 - 「処理中...」のまま3分待つ
-- ブラウザを閉じたらやり直し
-- タイムアウトしたら最初から
+- **ブラウザを閉じたらやり直し**
+- **タイムアウトしたら最初から**
 
 **キューあり：**
 - 「エクスポート」ボタンを押す
-- 「完了したらメールでお知らせします」
-- 別の作業をする
+- 「完了したらメールでお知らせします」（0.1秒）
+- **別の作業をする**
 - 5分後「ダウンロード可能になりました」とメール
-- いつでもダウンロード
+- **いつでもダウンロード**（24時間有効）
 
-「待っている時間」がゼロになる。
+**「待っている時間」がゼロになる。**
 
 ### 例3：承認ワークフロー
 
@@ -296,20 +526,139 @@ PDFの生成には30秒かかるかもしれない。外部サービスとの連
 
 ---
 
+## キュー導入判断フローチャート
+
+```mermaid
+flowchart TD
+    Start([処理の設計を検討])
+    Q1{処理時間は<br/>3秒以内？}
+    Q2{ユーザーは<br/>結果を待つ必要？}
+    Q3{エラー発生<br/>頻度は？}
+    Q4{大量データ<br/>処理？}
+    Q5{外部サービス<br/>連携あり？}
+
+    Sync[同期処理<br/>シンプルでOK]
+    Queue[キュー導入<br/>を検討]
+    MustQueue[キュー導入<br/>強く推奨]
+
+    Optimize[まず最適化<br/>インデックス追加<br/>N+1解消]
+
+    Examples["具体例:<br/>・請求書一括作成<br/>・PDF/CSV生成<br/>・メール一斉送信<br/>・データ集計<br/>・外部API連携"]
+
+    Start --> Q1
+    Q1 -->|Yes| Q2
+    Q1 -->|No| Queue
+
+    Q2 -->|Yes<br/>決済確認等| Sync
+    Q2 -->|No| Q3
+
+    Q3 -->|高い| MustQueue
+    Q3 -->|低い| Q4
+
+    Q4 -->|Yes<br/>100件以上| MustQueue
+    Q4 -->|No| Q5
+
+    Q5 -->|Yes| MustQueue
+    Q5 -->|No| Optimize
+
+    Queue --> Examples
+    MustQueue --> Examples
+
+    style Start fill:#e3f2fd
+    style Sync fill:#fff3e0,stroke:#f57c00
+    style Queue fill:#e8f5e9,stroke:#388e3c
+    style MustQueue fill:#4caf50,stroke:#2e7d32,color:#fff
+    style Examples fill:#e1f5fe,stroke:#0277bd
+```
+
 ## 補足：キューを検討すべきサイン
 
 以下の状況があれば、キューの導入を検討してみてほしい：
 
-- [ ] 「処理中...」の画面で30秒以上待つことがある
-- [ ] 大量データの処理中にタイムアウトが起きる
-- [ ] エラーが起きるたびに人間が判断を求められる
-- [ ] 「一括処理」をすると画面が固まる
-- [ ] 外部サービス連携で「待ち」が発生する
-- [ ] 同じ処理の「やり直し」が頻繁に起きる
+| サイン | 深刻度 | キュー導入効果 |
+|-------|--------|---------------|
+| 「処理中...」の画面で30秒以上待つ | ⚠️ 中 | ユーザー解放 |
+| 大量データ処理でタイムアウト | 🔴 高 | 確実に完了 |
+| エラーの度に人間が判断 | 🔴 高 | 判断回数激減 |
+| 「一括処理」で画面が固まる | 🔴 高 | バックグラウンド化 |
+| 外部サービス連携で待ち発生 | ⚠️ 中 | 非同期化 |
+| 処理の「やり直し」が頻繁 | 🔴 高 | 自動リトライ |
 
-1つでも当てはまるなら、キューを入れることで人間の仕事が減る可能性が高い。
+**1つでも🔴があれば、キューを入れることで人間の仕事が大幅に減る可能性が高い。**
 
 技術の問題ではない。**設計の問題**だ。
+
+---
+
+## 実装のヒント：主要なキューシステム
+
+キューを導入する際の代表的な選択肢：
+
+### クラウドマネージド
+
+| サービス | 特徴 | 適用ケース |
+|---------|------|-----------|
+| **AWS SQS** | フルマネージド、無限スケール | AWS環境、シンプルなキュー |
+| **Google Cloud Tasks** | HTTPエンドポイント呼び出し | GCP環境、簡単な非同期処理 |
+| **Azure Queue Storage** | Azureネイティブ | Azure環境 |
+
+### セルフホスト
+
+| ツール | 特徴 | 適用ケース |
+|-------|------|-----------|
+| **Redis + Bull/BullMQ** | Node.js向け、軽量 | 小〜中規模、Node.js |
+| **RabbitMQ** | 高機能、複雑なルーティング | 複雑なワークフロー |
+| **Apache Kafka** | 超大規模、ストリーミング | ビッグデータ、イベント駆動 |
+
+### シンプルな実装例（Node.js + BullMQ）
+
+```javascript
+import { Queue, Worker } from 'bullmq';
+
+// キュー作成
+const invoiceQueue = new Queue('invoice-generation');
+
+// ジョブ投入（APIエンドポイント）
+app.post('/api/invoices/bulk', async (req, res) => {
+  const { invoiceIds } = req.body;
+
+  // 200件をまとめてキューに投入
+  await invoiceQueue.addBulk(
+    invoiceIds.map(id => ({ name: 'generate', data: { id } }))
+  );
+
+  res.json({ message: '受け付けました。完了したら通知します' });
+});
+
+// ワーカー（バックグラウンド処理）
+const worker = new Worker('invoice-generation', async (job) => {
+  const { id } = job.data;
+
+  // PDF生成などの重い処理
+  await generateInvoicePDF(id);
+  await sendEmail(id);
+
+  return { success: true, invoiceId: id };
+}, {
+  connection: { host: 'localhost', port: 6379 },
+  autorun: true,
+  concurrency: 5, // 5件並行処理
+  limiter: { max: 10, duration: 1000 }, // レート制限
+  attempts: 3, // 自動リトライ3回
+  backoff: { type: 'exponential', delay: 1000 }
+});
+
+// 成功・失敗の処理
+worker.on('completed', (job) => {
+  console.log(`✅ 完了: ${job.data.id}`);
+  notifyUser(job.data.id, 'success');
+});
+
+worker.on('failed', (job, err) => {
+  console.error(`❌ 失敗: ${job.data.id}`, err);
+  saveToDLQ(job.data.id, err);
+});
+```
 
 ---
 
