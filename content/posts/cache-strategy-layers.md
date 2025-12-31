@@ -653,6 +653,64 @@ sync; echo 3 > /proc/sys/vm/drop_caches
 
 キャッシュの実装方法には、主に4つのパターンがあります。用途に応じて使い分けることが重要です。
 
+### パターン全体像（縦並び比較）
+
+```mermaid
+graph TB
+    Title["4つのキャッシュパターン比較"]
+
+    subgraph Pattern1["① Cache-Aside（最も一般的）"]
+        CA_App[アプリ] -->|1. 確認| CA_Cache[キャッシュ]
+        CA_Cache -->|2. ミス| CA_App
+        CA_App -->|3. 取得| CA_DB[(DB)]
+        CA_DB -->|4. 返却| CA_App
+        CA_App -->|5. 保存| CA_Cache
+
+        CA_Note["特徴: アプリが全て制御<br/>整合性: △<br/>用途: 最も一般的"]
+    end
+
+    subgraph Pattern2["② Read-Through（キャッシュが代行）"]
+        RT_App[アプリ] -->|1. リクエスト| RT_Cache[キャッシュ]
+        RT_Cache -->|2. ミス時自動取得| RT_DB[(DB)]
+        RT_DB -->|3. 取得| RT_Cache
+        RT_Cache -->|4. 返却| RT_App
+
+        RT_Note["特徴: キャッシュが自動でDB取得<br/>整合性: ○<br/>用途: 読み取り専用"]
+    end
+
+    subgraph Pattern3["③ Write-Through（同期的書き込み）"]
+        WT_App[アプリ] -->|1. 書込| WT_Cache[キャッシュ]
+        WT_Cache -->|2. 同期書込| WT_DB[(DB)]
+        WT_DB -->|3. 完了| WT_Cache
+        WT_Cache -->|4. 完了| WT_App
+
+        WT_Note["特徴: キャッシュとDB同時更新<br/>整合性: ◎<br/>用途: 強い整合性が必要"]
+    end
+
+    subgraph Pattern4["④ Write-Back（非同期書き込み）"]
+        WB_App[アプリ] -->|1. 書込| WB_Cache[キャッシュ]
+        WB_Cache -->|2. 即完了| WB_App
+        WB_Cache -.->|3. 非同期書込| WB_DB[(DB)]
+
+        WB_Note["特徴: 非同期でDB更新<br/>整合性: △<br/>用途: 高速書き込み必須"]
+    end
+
+    Title -.-> Pattern1
+    Pattern1 -.-> Pattern2
+    Pattern2 -.-> Pattern3
+    Pattern3 -.-> Pattern4
+
+    style Title fill:#e3f2fd,stroke:#1976d2,stroke-width:3px
+    style Pattern1 fill:#e1f5ff,stroke:#01579b
+    style Pattern2 fill:#e8f5e9,stroke:#1b5e20
+    style Pattern3 fill:#fff3e0,stroke:#e65100
+    style Pattern4 fill:#fce4ec,stroke:#880e4f
+    style CA_Note fill:#f0f4c3,stroke:#827717
+    style RT_Note fill:#f0f4c3,stroke:#827717
+    style WT_Note fill:#f0f4c3,stroke:#827717
+    style WB_Note fill:#f0f4c3,stroke:#827717
+```
+
 ### パターン比較表
 
 | パターン | 読み取り | 書き込み | 整合性 | 複雑さ | 用途 |
