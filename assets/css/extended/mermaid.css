@@ -2,6 +2,9 @@
 
 /* Mermaid図を含むコンテナのスタイリング */
 .mermaid {
+  /* 常にブロック要素として縦並びを強制 */
+  display: block !important;
+
   /* 中央揃え */
   margin: 2rem auto;
   padding: 1rem;
