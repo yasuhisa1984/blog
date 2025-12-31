@@ -179,26 +179,26 @@ graph TB
 
 ```mermaid
 sequenceDiagram
-    participant A as トランザクションA<br/>（送金処理）
-    participant Row1 as 行1<br/>（口座ID=1）
-    participant Row2 as 行2<br/>（口座ID=2）
-    participant B as トランザクションB<br/>（送金処理）
+    participant A as トランザクションA
+    participant Row1 as 行1（ID=1）
+    participant Row2 as 行2（ID=2）
+    participant B as トランザクションB
 
     Note over A,B: 時刻 T0: 両方同時に開始
 
-    A->>Row1: 🔒 排他ロック取得<br/>UPDATE accounts WHERE id=1
-    Note over Row1: Aが保持中
+    A->>Row1: 🔒 排他ロック取得
+    Note right of Row1: UPDATE accounts<br/>WHERE id=1<br/>Aが保持中
 
-    B->>Row2: 🔒 排他ロック取得<br/>UPDATE accounts WHERE id=2
-    Note over Row2: Bが保持中
+    B->>Row2: 🔒 排他ロック取得
+    Note right of Row2: UPDATE accounts<br/>WHERE id=2<br/>Bが保持中
 
     Note over A,B: 時刻 T1: 次の行をロックしようとする
 
-    A->>Row2: ロック要求<br/>UPDATE accounts WHERE id=2
-    Note over Row2: ❌ Bが保持中<br/>Aは待機...
+    A->>Row2: ロック要求
+    Note right of Row2: ❌ Bが保持中<br/>Aは待機...
 
-    B->>Row1: ロック要求<br/>UPDATE accounts WHERE id=1
-    Note over Row1: ❌ Aが保持中<br/>Bは待機...
+    B->>Row1: ロック要求
+    Note right of Row1: ❌ Aが保持中<br/>Bは待機...
 
     Note over A,B: 💥 デッドロック発生！<br/>互いのロック解放を待ち合う
 
@@ -207,7 +207,7 @@ sequenceDiagram
     Row1->>B: ✅ ロック取得成功
     B->>Row2: ✅ 処理続行
 
-    Note over A: ERROR 1213: Deadlock found
+    Note over A: ERROR 1213:<br/>Deadlock found
 
     style A fill:#ffebee
     style B fill:#e8f5e9
