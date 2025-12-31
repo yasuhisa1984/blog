@@ -178,41 +178,43 @@ graph TB
 **デッドロック** は、2つ以上のトランザクションが互いのロック解放を待ち合う状態です。
 
 ```mermaid
-sequenceDiagram
-    participant A as Transaction A
-    participant R1 as Row 1
-    participant R2 as Row 2
-    participant B as Transaction B
+graph TB
+    subgraph T0["時刻 T0: 両方のトランザクション開始"]
+        A1["Transaction A<br/>行1をロック"]
+        B1["Transaction B<br/>行2をロック"]
+    end
 
-    Note over A,B: T0: Both start simultaneously
+    subgraph T1["時刻 T1: 次の行をロックしようとする"]
+        A2["Transaction A<br/>行2をロック要求<br/>（Bが保持中）"]
+        B2["Transaction B<br/>行1をロック要求<br/>（Aが保持中）"]
+    end
 
-    A->>R1: Lock Row 1
-    Note right of R1: UPDATE accounts<br/>WHERE id=1
+    subgraph Deadlock["デッドロック発生"]
+        D["互いのロック解放を<br/>待ち合う状態"]
+    end
 
-    B->>R2: Lock Row 2
-    Note right of R2: UPDATE accounts<br/>WHERE id=2
+    subgraph Resolution["MySQL自動検出と解決"]
+        R1["Transaction Aを<br/>ロールバック"]
+        R2["Transaction Bが<br/>行1のロックを取得"]
+        R3["Transaction B<br/>処理完了"]
+    end
 
-    Note over A,B: T1: Each tries to lock the other row
+    A1 --> A2
+    B1 --> B2
+    A2 --> D
+    B2 --> D
+    D --> R1
+    R1 --> R2
+    R2 --> R3
 
-    A->>R2: Request Lock on Row 2
-    Note right of R2: Waiting...<br/>B holds the lock
-
-    B->>R1: Request Lock on Row 1
-    Note right of R1: Waiting...<br/>A holds the lock
-
-    Note over A,B: DEADLOCK DETECTED
-
-    Note over A: MySQL rolls back<br/>Transaction A
-    R1-->>A: Release lock
-    R1->>B: Grant lock
-    B->>R2: Continue
-
-    Note over A: ERROR 1213<br/>Deadlock found
-
-    style A fill:#ffebee
-    style B fill:#e8f5e9
-    style R1 fill:#fff3e0
-    style R2 fill:#e1f5fe
+    style A1 fill:#e3f2fd
+    style A2 fill:#ffebee
+    style B1 fill:#e8f5e9
+    style B2 fill:#ffebee
+    style D fill:#f44336,color:#fff
+    style R1 fill:#ff9800,color:#fff
+    style R2 fill:#4caf50,color:#fff
+    style R3 fill:#4caf50,color:#fff
 ```
 
 **デッドロック発生の条件（4つ全て満たす）：**
