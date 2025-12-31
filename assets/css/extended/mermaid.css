@@ -1,0 +1,142 @@
+/* Mermaid図のレスポンシブ対応CSS */
+
+/* Mermaid図を含むコンテナのスタイリング */
+.mermaid {
+  /* 中央揃え */
+  margin: 2rem auto;
+  padding: 1rem;
+
+  /* 横スクロールを可能にする */
+  overflow-x: auto;
+  overflow-y: hidden;
+
+  /* 最大幅を設定（大画面での見やすさ） */
+  max-width: 100%;
+
+  /* スムーズなスクロール */
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+
+  /* 背景と枠線 */
+  background-color: var(--code-bg);
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+
+/* Mermaid SVG要素のスタイリング */
+.mermaid svg {
+  /* SVGの最大幅を調整 */
+  max-width: 100%;
+  height: auto;
+
+  /* SVGを中央に配置 */
+  display: block;
+  margin: 0 auto;
+
+  /* 最小高さを設定（小さすぎる図を防ぐ） */
+  min-height: 200px;
+}
+
+/* 横長の図に対する特別な対応 */
+.mermaid svg[width] {
+  /* 元の幅が大きい場合は、コンテナに合わせる */
+  width: 100%;
+}
+
+/* モバイル画面での最適化 */
+@media screen and (max-width: 768px) {
+  .mermaid {
+    /* モバイルでは左右の余白を減らす */
+    margin: 1.5rem -1rem;
+    padding: 1rem 0.5rem;
+
+    /* スクロールバーを常に表示（スクロール可能を明示） */
+    overflow-x: auto;
+  }
+
+  .mermaid svg {
+    /* モバイルでは最小幅を設定（ピンチズーム可能） */
+    min-width: 100%;
+  }
+}
+
+/* タブレット画面での最適化 */
+@media screen and (min-width: 769px) and (max-width: 1024px) {
+  .mermaid {
+    margin: 2rem 0;
+  }
+}
+
+/* 大画面での最適化 */
+@media screen and (min-width: 1025px) {
+  .mermaid {
+    /* 大画面では最大幅を制限（読みやすさ） */
+    max-width: 1200px;
+  }
+}
+
+/* ダークモードでの調整 */
+@media (prefers-color-scheme: dark) {
+  .mermaid {
+    /* ダークモード用の背景色 */
+    background-color: var(--code-bg);
+    border-color: var(--border);
+  }
+}
+
+/* PaperModテーマのダークモード切り替えに対応 */
+[data-theme="dark"] .mermaid {
+  background-color: var(--code-bg);
+  border-color: var(--border);
+}
+
+/* ホバー時のスクロールヒント */
+.mermaid:hover {
+  /* ホバー時に枠線を強調（スクロール可能を示唆） */
+  border-color: var(--primary);
+  transition: border-color 0.3s ease;
+}
+
+/* Mermaid図の読み込み中スタイル */
+.mermaid[data-processed="false"] {
+  /* 読み込み中は少し透明に */
+  opacity: 0.6;
+  min-height: 100px;
+}
+
+/* Mermaid図のフォントサイズ調整 */
+.mermaid text {
+  font-size: 14px !important;
+}
+
+/* モバイルでのフォントサイズ */
+@media screen and (max-width: 768px) {
+  .mermaid text {
+    font-size: 12px !important;
+  }
+}
+
+/* 横スクロールバーのスタイリング（Webkit） */
+.mermaid::-webkit-scrollbar {
+  height: 8px;
+}
+
+.mermaid::-webkit-scrollbar-track {
+  background: var(--code-bg);
+  border-radius: 4px;
+}
+
+.mermaid::-webkit-scrollbar-thumb {
+  background: var(--primary);
+  border-radius: 4px;
+}
+
+.mermaid::-webkit-scrollbar-thumb:hover {
+  background: var(--secondary);
+}
+
+/* Firefoxでのスクロールバースタイリング */
+.mermaid {
+  scrollbar-width: thin;
+  scrollbar-color: var(--primary) var(--code-bg);
+}
