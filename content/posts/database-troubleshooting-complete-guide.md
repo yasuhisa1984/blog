@@ -179,40 +179,40 @@ graph TB
 
 ```mermaid
 sequenceDiagram
-    participant A as トランザクションA
-    participant Row1 as 行1（ID=1）
-    participant Row2 as 行2（ID=2）
-    participant B as トランザクションB
+    participant A as Transaction A
+    participant R1 as Row 1
+    participant R2 as Row 2
+    participant B as Transaction B
 
-    Note over A,B: 時刻 T0: 両方同時に開始
+    Note over A,B: T0: Both start simultaneously
 
-    A->>Row1: 🔒 排他ロック取得
-    Note right of Row1: UPDATE accounts<br/>WHERE id=1<br/>Aが保持中
+    A->>R1: Lock Row 1
+    Note right of R1: UPDATE accounts<br/>WHERE id=1
 
-    B->>Row2: 🔒 排他ロック取得
-    Note right of Row2: UPDATE accounts<br/>WHERE id=2<br/>Bが保持中
+    B->>R2: Lock Row 2
+    Note right of R2: UPDATE accounts<br/>WHERE id=2
 
-    Note over A,B: 時刻 T1: 次の行をロックしようとする
+    Note over A,B: T1: Each tries to lock the other row
 
-    A->>Row2: ロック要求
-    Note right of Row2: ❌ Bが保持中<br/>Aは待機...
+    A->>R2: Request Lock on Row 2
+    Note right of R2: Waiting...<br/>B holds the lock
 
-    B->>Row1: ロック要求
-    Note right of Row1: ❌ Aが保持中<br/>Bは待機...
+    B->>R1: Request Lock on Row 1
+    Note right of R1: Waiting...<br/>A holds the lock
 
-    Note over A,B: 💥 デッドロック発生！<br/>互いのロック解放を待ち合う
+    Note over A,B: DEADLOCK DETECTED
 
-    Note over A: ⚠️ MySQL自動検出<br/>→ Aをロールバック
-    Row1-->>A: ロック解放
-    Row1->>B: ✅ ロック取得成功
-    B->>Row2: ✅ 処理続行
+    Note over A: MySQL rolls back<br/>Transaction A
+    R1-->>A: Release lock
+    R1->>B: Grant lock
+    B->>R2: Continue
 
-    Note over A: ERROR 1213:<br/>Deadlock found
+    Note over A: ERROR 1213<br/>Deadlock found
 
     style A fill:#ffebee
     style B fill:#e8f5e9
-    style Row1 fill:#fff3e0
-    style Row2 fill:#e1f5fe
+    style R1 fill:#fff3e0
+    style R2 fill:#e1f5fe
 ```
 
 **デッドロック発生の条件（4つ全て満たす）：**
