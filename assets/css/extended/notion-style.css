@@ -1,0 +1,404 @@
+/* Notion風記事一覧デザイン */
+
+/* ==========================================================================
+   メインコンテナのグリッドレイアウト
+   ========================================================================== */
+
+.main {
+  /* ページ全体を1ページで表示 */
+  max-width: 1400px;
+  width: 100%;
+  margin: 0 auto;
+  padding: var(--gap);
+}
+
+/* ホームページとリストページのグリッドレイアウト */
+.main:has(.post-entry) {
+  display: block;
+}
+
+/* 記事カードのコンテナ */
+.list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+  gap: 1.5rem;
+  margin: 2rem 0;
+  padding: 0;
+  background: transparent;
+}
+
+/* ==========================================================================
+   Notion風カードデザイン
+   ========================================================================== */
+
+.post-entry {
+  /* カードの基本スタイル */
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  background: var(--entry);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0;
+  margin: 0;
+
+  /* トランジション効果 */
+  transition: all 0.2s ease-in-out;
+  transform: translateY(0);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+
+  /* 高さを自動調整 */
+  height: 100%;
+  min-height: 280px;
+
+  overflow: hidden;
+}
+
+/* ホバー効果 */
+.post-entry:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+  border-color: var(--primary);
+}
+
+/* アクティブ時（クリック時）の効果を無効化 */
+.post-entry:active {
+  transform: translateY(-4px);
+}
+
+/* ==========================================================================
+   カバー画像
+   ========================================================================== */
+
+.post-entry .entry-cover {
+  margin: 0;
+  padding: 0;
+  height: 180px;
+  overflow: hidden;
+  background: var(--code-bg);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.post-entry .entry-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 0;
+  margin: 0;
+  transition: transform 0.3s ease;
+}
+
+.post-entry:hover .entry-cover img {
+  transform: scale(1.05);
+}
+
+/* カバー画像がない場合のプレースホルダー */
+.post-entry:not(:has(.entry-cover)) {
+  padding-top: 1.5rem;
+}
+
+/* ==========================================================================
+   ヘッダー（タイトル）
+   ========================================================================== */
+
+.post-entry .entry-header {
+  padding: 1.25rem 1.5rem 0.75rem;
+  flex-shrink: 0;
+}
+
+.post-entry .entry-header h2 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  line-height: 1.4;
+  margin: 0;
+  color: var(--primary);
+
+  /* 2行で省略 */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.post-entry:hover .entry-header h2 {
+  color: var(--primary);
+}
+
+/* ドラフトバッジ */
+.post-entry .entry-hint {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  background: #fef3c7;
+  color: #92400e;
+  font-size: 0.75rem;
+  border-radius: 4px;
+  margin-left: 0.5rem;
+}
+
+/* ==========================================================================
+   コンテンツ（概要）
+   ========================================================================== */
+
+.post-entry .entry-content {
+  padding: 0 1.5rem;
+  margin: 0;
+  flex-grow: 1;
+
+  /* 3行で省略 */
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.post-entry .entry-content p {
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: var(--secondary);
+  margin: 0;
+}
+
+/* ==========================================================================
+   フッター（メタ情報・タグ）
+   ========================================================================== */
+
+.post-entry .entry-footer {
+  padding: 0.75rem 1.5rem 1.25rem;
+  margin: 0;
+  border-top: 1px solid var(--border);
+  background: var(--code-bg);
+  flex-shrink: 0;
+}
+
+.post-entry .entry-footer .post-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  color: var(--secondary);
+}
+
+.post-entry .entry-footer .post-meta svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* タグのスタイル */
+.post-entry .tags-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.post-entry .tags-list a {
+  display: inline-block;
+  padding: 3px 10px;
+  background: var(--tertiary);
+  color: var(--primary);
+  font-size: 0.75rem;
+  border-radius: 4px;
+  text-decoration: none;
+  transition: background 0.2s ease;
+}
+
+.post-entry .tags-list a:hover {
+  background: var(--secondary);
+  color: var(--theme);
+}
+
+/* ==========================================================================
+   リンク
+   ========================================================================== */
+
+.post-entry .entry-link {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1;
+}
+
+/* ==========================================================================
+   最初の記事（ピン留め）
+   ========================================================================== */
+
+.first-entry {
+  /* 通常のカードと同じスタイルに */
+  grid-column: 1 / -1;
+  min-height: 320px;
+  background: linear-gradient(135deg, var(--entry) 0%, var(--code-bg) 100%);
+  border: 2px solid var(--primary);
+  position: relative;
+}
+
+.first-entry::before {
+  content: "📌 ピン留め";
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  padding: 4px 12px;
+  background: var(--primary);
+  color: var(--theme);
+  font-size: 0.75rem;
+  border-radius: 4px;
+  font-weight: 600;
+  z-index: 2;
+}
+
+.first-entry .entry-header h1 {
+  font-size: 2rem;
+}
+
+/* ==========================================================================
+   ページネーション
+   ========================================================================== */
+
+.page-footer {
+  grid-column: 1 / -1;
+  margin-top: 3rem;
+  padding-top: 2rem;
+  border-top: 2px solid var(--border);
+}
+
+.pagination {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+}
+
+.pagination a {
+  padding: 0.75rem 1.5rem;
+  background: var(--entry);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--primary);
+  text-decoration: none;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.pagination a:hover {
+  background: var(--primary);
+  color: var(--theme);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* ==========================================================================
+   レスポンシブ対応
+   ========================================================================== */
+
+/* タブレット */
+@media screen and (max-width: 1024px) {
+  .list {
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 1.25rem;
+  }
+
+  .main {
+    max-width: 100%;
+    padding: 1rem;
+  }
+}
+
+/* スマホ */
+@media screen and (max-width: 768px) {
+  .list {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+    margin: 1rem 0;
+  }
+
+  .post-entry {
+    min-height: 240px;
+  }
+
+  .post-entry .entry-cover {
+    height: 150px;
+  }
+
+  .post-entry .entry-header {
+    padding: 1rem 1.25rem 0.5rem;
+  }
+
+  .post-entry .entry-header h2 {
+    font-size: 1.1rem;
+  }
+
+  .post-entry .entry-content {
+    padding: 0 1.25rem;
+  }
+
+  .post-entry .entry-footer {
+    padding: 0.5rem 1.25rem 1rem;
+  }
+
+  .first-entry {
+    min-height: 280px;
+  }
+
+  .first-entry .entry-header h1 {
+    font-size: 1.5rem;
+  }
+}
+
+/* 大画面（3列表示） */
+@media screen and (min-width: 1400px) {
+  .list {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 2rem;
+  }
+
+  .main {
+    max-width: 1600px;
+  }
+}
+
+/* ==========================================================================
+   ダークモード対応
+   ========================================================================== */
+
+[data-theme="dark"] .post-entry {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+[data-theme="dark"] .post-entry:hover {
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4);
+}
+
+[data-theme="dark"] .post-entry .entry-hint {
+  background: #78350f;
+  color: #fef3c7;
+}
+
+/* ==========================================================================
+   アーカイブページの調整
+   ========================================================================== */
+
+.archive-posts {
+  max-width: 100%;
+}
+
+.archive-year,
+.archive-month {
+  background: var(--entry);
+  border-radius: 8px;
+  padding: 1.5rem;
+  margin: 1rem 0;
+  border: 1px solid var(--border);
+}
+
+.archive-entry {
+  padding: 0.75rem 0;
+  transition: background 0.2s ease;
+}
+
+.archive-entry:hover {
+  background: var(--code-bg);
+  border-radius: 4px;
+  padding-left: 0.5rem;
+}

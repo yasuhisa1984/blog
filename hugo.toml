@@ -4,7 +4,7 @@ title = 'Code & Insights'
 theme = 'PaperMod'
 
 [pagination]
-  pagerSize = 10
+  pagerSize = 100  # 1ページで全記事を表示（Notion風）
 
 [services]
   [services.googleAnalytics]
