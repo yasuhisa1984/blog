@@ -100,6 +100,31 @@ PATCH   → 部分更新する（一部だけ変える）
 DELETE  → 削除する
 ```
 
+#### HTTPメソッド選択フローチャート
+
+```mermaid
+flowchart TB
+    Start["何をしたい？"] --> Q1{操作の種類は？}
+
+    Q1 -->|データ取得| GET["✅ GET<br/>━━━━━━<br/>・リソースの取得<br/>・検索<br/>・一覧表示<br/><br/>特性：<br/>・安全（副作用なし）<br/>・冪等<br/>・キャッシュ可能"]
+
+    Q1 -->|データ作成| POST["✅ POST<br/>━━━━━━<br/>・新規リソース作成<br/>・ログイン<br/>・検索（複雑な条件）<br/><br/>特性：<br/>・非安全<br/>・非冪等<br/>・冪等キー推奨"]
+
+    Q1 -->|データ更新| Q2{更新方法は？}
+
+    Q2 -->|全体を置換| PUT["✅ PUT<br/>━━━━━━<br/>・リソース全体の置換<br/>・全フィールド必須<br/><br/>特性：<br/>・非安全<br/>・冪等<br/>・リトライ安全"]
+
+    Q2 -->|一部だけ変更| PATCH["✅ PATCH<br/>━━━━━━<br/>・部分的な更新<br/>・変更フィールドのみ<br/><br/>特性：<br/>・非安全<br/>・非冪等（実装次第）"]
+
+    Q1 -->|データ削除| DELETE["✅ DELETE<br/>━━━━━━<br/>・リソースの削除<br/><br/>特性：<br/>・非安全<br/>・冪等<br/>・リトライ安全"]
+
+    style GET fill:#e8f5e9
+    style POST fill:#fff3e0
+    style PUT fill:#e3f2fd
+    style PATCH fill:#e3f2fd
+    style DELETE fill:#ffebee
+```
+
 ### 【重要】安全性と冪等性
 
 この概念を理解していないと、障害を起こす。
@@ -188,6 +213,38 @@ GET /api/users/123/delete
 
 **GETは副作用なし。これは絶対のルール。**
 
+#### なぜGETで更新すると危険なのか
+
+```mermaid
+flowchart TB
+    BadAPI["❌ 悪い例：<br/><code style='color: white'>GET /api/users/123/delete</code>"]
+
+    BadAPI --> Problem1["⚠️ 問題1：ブラウザプリフェッチ"]
+    BadAPI --> Problem2["⚠️ 問題2：クローラーアクセス"]
+    BadAPI --> Problem3["⚠️ 問題3：キャッシュ"]
+
+    Problem1 --> Detail1["🌐 ブラウザ<br/>━━━━━━<br/>「このリンク先を<br/>先読みしておこう」<br/><br/>→ ユーザーがクリックする前に<br/>　データが削除される！"]
+
+    Problem2 --> Detail2["🤖 Googlebot<br/>━━━━━━<br/>「GETは安全だから<br/>アクセスしても問題ない」<br/><br/>→ クローラー巡回で<br/>　データが削除される！"]
+
+    Problem3 --> Detail3["💾 CDN/プロキシ<br/>━━━━━━<br/>「GETはキャッシュして<br/>次回は保存済みを返そう」<br/><br/>→ 削除リクエストが<br/>　キャッシュから返される<br/>　（削除されない）"]
+
+    Detail1 --> Solution["✅ 正しい実装"]
+    Detail2 --> Solution
+    Detail3 --> Solution
+
+    Solution --> Correct["<code style='color: white'>DELETE /api/users/123</code><br/>━━━━━━<br/>・副作用がある操作は<br/>　DELETEメソッド<br/>・ブラウザもクローラーも<br/>　勝手にアクセスしない<br/>・キャッシュされない"]
+
+    style BadAPI fill:#ffebee
+    style Problem1 fill:#fff3e0
+    style Problem2 fill:#fff3e0
+    style Problem3 fill:#fff3e0
+    style Detail1 fill:#ffebee
+    style Detail2 fill:#ffebee
+    style Detail3 fill:#ffebee
+    style Correct fill:#e8f5e9
+```
+
 ---
 
 ## ステータスコードの本質
@@ -270,6 +327,63 @@ def create_user(request):
         headers={"Location": f"/api/users/{user.id}"},
         body=user.to_dict()
     )
+```
+
+#### ステータスコード選択フローチャート
+
+```mermaid
+flowchart TB
+    Start["API処理結果"] --> Q1{処理は<br/>成功した？}
+
+    Q1 -->|Yes| Q2{何の操作？}
+
+    Q2 -->|リソース作成| S201["✅ 201 Created<br/>━━━━━━<br/>+ Locationヘッダー"]
+    Q2 -->|更新・取得| Q3{レスポンスbodyは？}
+    Q3 -->|あり| S200["✅ 200 OK"]
+    Q3 -->|なし| S204["✅ 204 No Content<br/>━━━━━━<br/>（DELETE成功など）"]
+
+    Q1 -->|No| Q4{どこで<br/>失敗した？}
+
+    Q4 -->|クライアント側| Q5{何が問題？}
+
+    Q5 -->|リクエスト形式不正| E400["❌ 400 Bad Request<br/>━━━━━━<br/>・JSON parse error<br/>・必須パラメータ欠如"]
+
+    Q5 -->|認証なし| E401["❌ 401 Unauthorized<br/>━━━━━━<br/>・トークンなし<br/>・トークン期限切れ"]
+
+    Q5 -->|権限なし| E403["❌ 403 Forbidden<br/>━━━━━━<br/>・認証済みだが<br/>　アクセス権限なし"]
+
+    Q5 -->|リソース不在| E404["❌ 404 Not Found"]
+
+    Q5 -->|バリデーションエラー| E422["❌ 422 Unprocessable Entity<br/>━━━━━━<br/>・メール形式不正<br/>・値が範囲外"]
+
+    Q5 -->|競合| E409["❌ 409 Conflict<br/>━━━━━━<br/>・メールアドレス重複<br/>・楽観ロック失敗"]
+
+    Q5 -->|レート制限| E429["❌ 429 Too Many Requests<br/>━━━━━━<br/>+ Retry-Afterヘッダー"]
+
+    Q4 -->|サーバー側| Q6{種類は？}
+
+    Q6 -->|内部エラー| E500["❌ 500 Internal Server Error<br/>━━━━━━<br/>・想定外の例外<br/>・DB接続失敗"]
+
+    Q6 -->|上流エラー| E502["❌ 502 Bad Gateway<br/>━━━━━━<br/>・外部API異常レスポンス"]
+
+    Q6 -->|一時的不可| E503["❌ 503 Service Unavailable<br/>━━━━━━<br/>・メンテナンス中<br/>・負荷過多"]
+
+    Q6 -->|上流タイムアウト| E504["❌ 504 Gateway Timeout"]
+
+    style S200 fill:#e8f5e9
+    style S201 fill:#e8f5e9
+    style S204 fill:#e8f5e9
+    style E400 fill:#fff3e0
+    style E401 fill:#fff3e0
+    style E403 fill:#fff3e0
+    style E404 fill:#fff3e0
+    style E409 fill:#fff3e0
+    style E422 fill:#fff3e0
+    style E429 fill:#fff3e0
+    style E500 fill:#ffebee
+    style E502 fill:#ffebee
+    style E503 fill:#ffebee
+    style E504 fill:#ffebee
 ```
 
 ---
@@ -453,6 +567,49 @@ SELECT * FROM users WHERE id > 123 ORDER BY id LIMIT 20;
 - 公開API（データ多い） → カーソルベース
 - 無限スクロール → カーソルベース一択
 
+#### ページネーション方式選択フロー
+
+```mermaid
+flowchart TB
+    Start["ページネーションが必要"] --> Q1{データ量は？}
+
+    Q1 -->|"小〜中規模<br/>(数千件程度)"| Q2{ページ番号<br/>ジャンプは必要？}
+
+    Q2 -->|Yes| Offset["✅ オフセットベース<br/>━━━━━━<br/><code style='color: white'>?page=2&per_page=20</code><br/><br/>メリット：<br/>・実装が簡単<br/>・任意ページへジャンプ可能<br/>・総ページ数を表示できる<br/><br/>デメリット：<br/>・大規模データで遅い<br/>・データ挿入で重複/欠落"]
+
+    Q2 -->|No| Cursor["✅ カーソルベース<br/>━━━━━━<br/><code style='color: white'>?cursor=abc&limit=20</code><br/><br/>メリット：<br/>・大規模データでも高速<br/>・データ挿入に強い<br/>・無限スクロール向き<br/><br/>デメリット：<br/>・ページジャンプ不可<br/>・総数がわからない"]
+
+    Q1 -->|"大規模<br/>(数万件以上)"| Cursor2["✅ カーソルベース<br/>一択"]
+
+    Q1 -->|"SNSフィード<br/>無限スクロール"| Cursor3["✅ カーソルベース<br/>一択"]
+
+    style Offset fill:#e3f2fd
+    style Cursor fill:#e8f5e9
+    style Cursor2 fill:#e8f5e9
+    style Cursor3 fill:#e8f5e9
+```
+
+#### オフセット vs カーソルの技術的違い
+
+```mermaid
+flowchart LR
+    subgraph OffsetMethod["オフセットベース（OFFSET）"]
+        O1["<code style='color: white'>SELECT * FROM users<br/>LIMIT 20 OFFSET 40</code>"]
+        O2["⚠️ 問題：<br/>━━━━━━<br/>OFFSETが大きいと<br/>全行スキャンで遅い<br/><br/>例：OFFSET 10000<br/>→ 10000行読み飛ばし"]
+    end
+
+    subgraph CursorMethod["カーソルベース（WHERE）"]
+        C1["<code style='color: white'>SELECT * FROM users<br/>WHERE id > 40<br/>LIMIT 20</code>"]
+        C2["✅ 利点：<br/>━━━━━━<br/>インデックスを使用<br/>常に高速<br/><br/>データ量に関係なく<br/>一定のパフォーマンス"]
+    end
+
+    O1 --> O2
+    C1 --> C2
+
+    style OffsetMethod fill:#fff3e0
+    style CursorMethod fill:#e8f5e9
+```
+
 ---
 
 ## 【実務】API設計でよくある問題と解決策
@@ -479,6 +636,49 @@ GET /api/orders?expand=user
 # 方法2: 一括取得エンドポイント
 GET /api/users?ids=10,20,30
 → [{"id": 10, ...}, {"id": 20, ...}, ...]
+```
+
+#### N+1問題の視覚化と解決策
+
+```mermaid
+sequenceDiagram
+    participant C as クライアント
+    participant API as APIサーバー
+
+    Note over C,API: ❌ 悪い実装：N+1リクエスト
+
+    C->>API: GET /api/orders
+    API->>C: [{id:1, user_id:10}, {id:2, user_id:20}, {id:3, user_id:30}]
+
+    Note over C: ユーザー情報を取得するため<br/>ループで個別リクエスト
+
+    C->>API: GET /api/users/10
+    API->>C: {id:10, name:"山田"}
+
+    C->>API: GET /api/users/20
+    API->>C: {id:20, name:"佐藤"}
+
+    C->>API: GET /api/users/30
+    API->>C: {id:30, name:"鈴木"}
+
+    Note over C,API: 合計4回のリクエスト！<br/>注文が100件なら101回！
+
+    Note over C,API: <br/>✅ 解決策1：expand パラメータ
+
+    C->>API: GET /api/orders?expand=user
+    API->>C: [{id:1, user:{id:10, name:"山田"}}, ...]
+
+    Note over C,API: 1回のリクエストで完結！
+
+    Note over C,API: <br/>✅ 解決策2：一括取得エンドポイント
+
+    C->>API: GET /api/orders
+    API->>C: [{id:1, user_id:10}, {id:2, user_id:20}, ...]
+
+    C->>API: GET /api/users?ids=10,20,30
+    API->>C: [{id:10, name:"山田"}, {id:20, name:"佐藤"}, ...]
+
+    Note over C,API: 2回のリクエストで完結！
 ```
 
 ### 問題2: 部分更新の表現
@@ -591,6 +791,52 @@ if (error.code === "RATE_LIMIT_EXCEEDED") {
   await sleep(error.retry_after * 1000);
   return retry();
 }
+```
+
+#### エラーハンドリングのベストプラクティス
+
+```mermaid
+flowchart TB
+    Request["APIリクエスト受信"] --> Auth{認証トークンは<br/>有効？}
+
+    Auth -->|No| E401["❌ 401 Unauthorized<br/>━━━━━━<br/>{<br/>  code: 'AUTHENTICATION_REQUIRED',<br/>  message: '認証が必要です'<br/>}"]
+
+    Auth -->|Yes| Authz{権限は<br/>ある？}
+
+    Authz -->|No| E403["❌ 403 Forbidden<br/>━━━━━━<br/>{<br/>  code: 'PERMISSION_DENIED',<br/>  message: 'アクセス権限がありません'<br/>}"]
+
+    Authz -->|Yes| Parse{リクエストbody<br/>パース可能？}
+
+    Parse -->|No| E400["❌ 400 Bad Request<br/>━━━━━━<br/>{<br/>  code: 'INVALID_JSON',<br/>  message: 'JSONが不正です'<br/>}"]
+
+    Parse -->|Yes| Validate{バリデーション<br/>OK？}
+
+    Validate -->|No| E422["❌ 422 Unprocessable Entity<br/>━━━━━━<br/>{<br/>  code: 'VALIDATION_ERROR',<br/>  message: '入力内容に問題があります',<br/>  details: [{field, message}]<br/>}"]
+
+    Validate -->|Yes| Exists{リソースは<br/>存在する？}
+
+    Exists -->|No| E404["❌ 404 Not Found<br/>━━━━━━<br/>{<br/>  code: 'RESOURCE_NOT_FOUND',<br/>  message: 'リソースが見つかりません'<br/>}"]
+
+    Exists -->|Yes| Conflict{競合は<br/>ない？}
+
+    Conflict -->|Yes| E409["❌ 409 Conflict<br/>━━━━━━<br/>{<br/>  code: 'RESOURCE_CONFLICT',<br/>  message: 'メールアドレスが既に存在します'<br/>}"]
+
+    Conflict -->|No| Process["ビジネスロジック実行"]
+
+    Process --> Success{成功？}
+
+    Success -->|No| E500["❌ 500 Internal Server Error<br/>━━━━━━<br/>{<br/>  code: 'INTERNAL_ERROR',<br/>  message: 'サーバーエラーが発生しました'<br/>}<br/><br/>⚠️ スタックトレースはログのみ<br/>クライアントには返さない"]
+
+    Success -->|Yes| S200["✅ 200 OK / 201 Created<br/>━━━━━━<br/>{<br/>  data: {...}<br/>}"]
+
+    style E401 fill:#fff3e0
+    style E403 fill:#fff3e0
+    style E400 fill:#fff3e0
+    style E422 fill:#fff3e0
+    style E404 fill:#fff3e0
+    style E409 fill:#fff3e0
+    style E500 fill:#ffebee
+    style S200 fill:#e8f5e9
 ```
 
 ---
@@ -763,6 +1009,50 @@ POST /api/auth/refresh
 **なぜ分けるか**:
 - アクセストークンが漏洩しても、被害は1時間
 - リフレッシュトークンは安全に保管（HttpOnly Cookie）
+
+#### JWT認証フロー（リフレッシュトークン込み）
+
+```mermaid
+sequenceDiagram
+    participant C as クライアント
+    participant API as APIサーバー
+    participant DB as データベース
+
+    Note over C,API: 1️⃣ 初回ログイン
+
+    C->>API: POST /api/auth/login<br/>{email, password}
+    API->>DB: ユーザー認証
+    DB->>API: 認証成功
+
+    API->>C: 200 OK<br/>{<br/>  access_token: "xxx" (1時間),<br/>  refresh_token: "yyy" (30日)<br/>}
+
+    Note over C: トークンを保存<br/>・access_token: localStorage<br/>・refresh_token: HttpOnly Cookie
+
+    Note over C,API: <br/>2️⃣ API呼び出し（通常時）
+
+    C->>API: GET /api/users/me<br/>Authorization: Bearer xxx
+    API->>API: JWTを検証<br/>（署名チェック、有効期限チェック）
+    API->>C: 200 OK<br/>{user data}
+
+    Note over C,API: <br/>3️⃣ アクセストークン期限切れ
+
+    C->>API: GET /api/users/me<br/>Authorization: Bearer xxx
+    API->>API: JWT検証失敗<br/>（期限切れ）
+    API->>C: 401 Unauthorized<br/>{error: "Token expired"}
+
+    Note over C: リフレッシュが必要
+
+    C->>API: POST /api/auth/refresh<br/>{refresh_token: "yyy"}
+    API->>DB: リフレッシュトークンを検証
+    DB->>API: 有効
+
+    API->>C: 200 OK<br/>{<br/>  access_token: "new_xxx" (1時間)<br/>}
+
+    Note over C: 新しいaccess_tokenで<br/>リトライ
+
+    C->>API: GET /api/users/me<br/>Authorization: Bearer new_xxx
+    API->>C: 200 OK<br/>{user data}
+```
 
 ---
 
