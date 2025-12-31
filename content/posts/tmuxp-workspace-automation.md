@@ -60,6 +60,37 @@ tmux new -s myapp
 
 今回紹介する `tmuxp` は、この「毎朝の儀式」をYAMLファイル1つで自動化するツールだ。
 
+### 手動セットアップ vs tmuxp自動化
+
+```mermaid
+flowchart TB
+    subgraph Manual["❌ 手動セットアップ（毎朝5分）"]
+        M1["1. ターミナル起動"] --> M2["2. プロジェクトに移動<br/><code style='color: white'>cd ~/projects/my-app</code>"]
+        M2 --> M3["3. tmuxセッション作成<br/><code style='color: white'>tmux new -s myapp</code>"]
+        M3 --> M4["4. ウィンドウ分割<br/><code style='color: white'>Ctrl-b %</code><br/><code style='color: white'>Ctrl-b \"</code>"]
+        M4 --> M5["5. 各ペインでコマンド実行<br/>・vim起動<br/>・サーバー起動<br/>・ログ監視<br/>・DB接続"]
+        M5 --> M6["⏱️ 5分後<br/>━━━━━━<br/>やっと開発開始"]
+    end
+
+    subgraph Auto["✅ tmuxp自動化（3秒）"]
+        A1["1. プロジェクトに移動<br/><code style='color: white'>cd ~/projects/my-app</code>"]
+        A2["2. コマンド一発<br/><code style='color: white'>tmuxp load .</code>"]
+        A3["⚡ 3秒後<br/>━━━━━━<br/>すぐに開発開始"]
+
+        A1 --> A2 --> A3
+    end
+
+    Manual -.->|.tmuxp.yaml作成で| Auto
+
+    TimeCalc["💡 時間の計算<br/>━━━━━━<br/>5分/日 × 20営業日 = 100分/月<br/>100分/月 × 12ヶ月 = 20時間/年<br/><br/>20時間 = 小さな機能1つ分"]
+
+    style Manual fill:#ffebee
+    style Auto fill:#e8f5e9
+    style M6 fill:#ffcdd2
+    style A3 fill:#c8e6c9
+    style TimeCalc fill:#fff3e0
+```
+
 ---
 
 ## tmuxpとは何か
@@ -258,6 +289,57 @@ layout: even-horizontal   # 横に均等分割
 layout: even-vertical     # 縦に均等分割
 ```
 
+#### tmuxレイアウトの視覚化
+
+```mermaid
+flowchart TB
+    subgraph MainH["main-horizontal"]
+        MH1["━━━━━━━━━━━━━━━<br/>メインペイン（70%）<br/>━━━━━━━━━━━━━━━"]
+        MH2["サブペイン1（15%）"]
+        MH3["サブペイン2（15%）"]
+        MH1 ~~~ MH2 ~~~ MH3
+    end
+
+    subgraph MainV["main-vertical"]
+        direction LR
+        MV1["メイン<br/>ペイン<br/>━━━<br/>60%"]
+        MV2["サブ1<br/>20%"]
+        MV3["サブ2<br/>20%"]
+        MV1 ~~~ MV2 ~~~ MV3
+    end
+
+    subgraph Tiled["tiled（4ペインの場合）"]
+        T1["ペイン1"] ~~~ T2["ペイン2"]
+        T3["ペイン3"] ~~~ T4["ペイン4"]
+        T1 ~~~ T3
+        T2 ~~~ T4
+    end
+
+    subgraph EvenH["even-horizontal"]
+        EH1["━━━ ペイン1（33%） ━━━"]
+        EH2["━━━ ペイン2（33%） ━━━"]
+        EH3["━━━ ペイン3（33%） ━━━"]
+        EH1 ~~~ EH2 ~~~ EH3
+    end
+
+    subgraph EvenV["even-vertical"]
+        direction LR
+        EV1["ペイン1<br/>33%"]
+        EV2["ペイン2<br/>33%"]
+        EV3["ペイン3<br/>33%"]
+        EV1 ~~~ EV2 ~~~ EV3
+    end
+
+    Usage["💡 使い分け<br/>━━━━━━<br/>・main-*: エディタ中心<br/>・even-*: サーバー監視<br/>・tiled: ダッシュボード"]
+
+    style MainH fill:#e3f2fd
+    style MainV fill:#e8f5e9
+    style Tiled fill:#fff3e0
+    style EvenH fill:#f3e5f5
+    style EvenV fill:#fce4ec
+    style Usage fill:#fffde7
+```
+
 ### ペインサイズの調整
 
 ```yaml
@@ -378,6 +460,36 @@ tmuxp load work
 tmuxp load personal
 ```
 
+#### 設定ファイルの管理戦略
+
+```mermaid
+flowchart TB
+    subgraph Local["📁 プロジェクトローカル設定"]
+        L1["~/projects/project-a/<br/>.tmuxp.yaml<br/>━━━━━━<br/>プロジェクト固有の環境<br/>・専用のディレクトリ<br/>・プロジェクト依存の<br/>　コマンド<br/><br/><code style='color: white'>tmuxp load .</code>"]
+        L2["~/projects/project-b/<br/>.tmuxp.yaml<br/>━━━━━━<br/>別プロジェクトの環境<br/>・異なるサーバー<br/>・異なるDB"]
+        L3["📤 Gitで管理<br/>━━━━━━<br/>・チームで共有<br/>・バージョン管理"]
+
+        L1 ~~~ L2
+        L2 ~~~ L3
+    end
+
+    subgraph Global["🏠 グローバル設定"]
+        G1["~/.tmuxp/work.yaml<br/>━━━━━━<br/>汎用的な業務環境<br/>・3ペイン構成<br/>・エディタ + ターミナル<br/><br/><code style='color: white'>tmuxp load work</code>"]
+        G2["~/.tmuxp/personal.yaml<br/>━━━━━━<br/>個人開発用<br/><br/><code style='color: white'>tmuxp load personal</code>"]
+        G3["~/.tmuxp/infra.yaml<br/>━━━━━━<br/>インフラ運用用<br/>・k9s<br/>・docker-compose logs<br/><br/><code style='color: white'>tmuxp load infra</code>"]
+
+        G1 ~~~ G2 ~~~ G3
+    end
+
+    Decision["どちらを使う？"] --> Q{"プロジェクト<br/>固有？"}
+    Q -->|Yes| Local
+    Q -->|No| Global
+
+    style Local fill:#e8f5e9
+    style Global fill:#e3f2fd
+    style L3 fill:#fff3e0
+```
+
 ### 3. エイリアスを設定する
 
 ```bash
@@ -396,6 +508,32 @@ alias tw='tmuxp load work'
 4. 次回から `tmuxp load .`
 
 「まず手で作って、良かったら保存」という流れが自然。
+
+#### tmuxpの理想的なワークフロー
+
+```mermaid
+flowchart LR
+    Start["🎯 理想の環境を<br/>イメージ"] --> Manual["👐 手動で構築<br/>━━━━━━<br/>・tmux起動<br/>・ウィンドウ分割<br/>・コマンド実行<br/>・配置調整"]
+
+    Manual --> Test{"使いやすい？"}
+
+    Test -->|No| Adjust["🔧 配置を調整<br/>━━━━━━<br/>・ペイン追加/削除<br/>・サイズ変更<br/>・コマンド変更"]
+    Adjust --> Manual
+
+    Test -->|Yes| Freeze["💾 設定を保存<br/>━━━━━━<br/><code style='color: white'>tmuxp freeze my-session > .tmuxp.yaml</code>"]
+
+    Freeze --> Edit["✏️ YAMLを整理<br/>━━━━━━<br/>・不要な設定削除<br/>・コマンド整理<br/>・フォーカス指定"]
+
+    Edit --> Load["⚡ 次回から自動<br/>━━━━━━<br/><code style='color: white'>tmuxp load .</code><br/><br/>3秒で環境再現！"]
+
+    Load --> Share["📤 チームで共有<br/>━━━━━━<br/>・Gitにコミット<br/>・チーム全員が<br/>　同じ環境を使用"]
+
+    style Manual fill:#e3f2fd
+    style Freeze fill:#fff3e0
+    style Edit fill:#fff3e0
+    style Load fill:#e8f5e9
+    style Share fill:#e8f5e9
+```
 
 ---
 
@@ -430,6 +568,41 @@ tmux側の設定を確認：
 # ~/.tmux.conf
 set -g default-terminal "screen-256color"
 set -g terminal-overrides ",xterm-256color:Tc"
+```
+
+### トラブルシューティングフロー
+
+```mermaid
+flowchart TB
+    Start["❌ tmuxpでエラー"] --> Q1{どんなエラー？}
+
+    Q1 -->|"Session already exists"| E1["🔍 セッション存在エラー<br/>━━━━━━<br/>原因：同名セッションが起動中"]
+    E1 --> S1["✅ 解決策"]
+    S1 --> S1A["1. 既存セッション終了<br/><code style='color: white'>tmux kill-session -t my-app</code><br/><code style='color: white'>tmuxp load .</code>"]
+    S1 --> S1B["2. 別名で起動<br/><code style='color: white'>tmuxp load . -s my-app-2</code>"]
+
+    Q1 -->|"Command not executed"| E2["🔍 コマンド未実行エラー<br/>━━━━━━<br/>原因：シェル初期化前に<br/>コマンド送信"]
+    E2 --> S2["✅ 解決策：sleep追加<br/><code style='color: white'>panes:</code><br/><code style='color: white'>  - shell_command:</code><br/><code style='color: white'>      - sleep 1</code><br/><code style='color: white'>      - npm run dev</code>"]
+
+    Q1 -->|"文字化け"| E3["🔍 文字化けエラー<br/>━━━━━━<br/>原因：tmux文字コード設定"]
+    E3 --> S3["✅ 解決策：~/.tmux.conf<br/><code style='color: white'>set -g default-terminal</code><br/><code style='color: white'>  \"screen-256color\"</code><br/><code style='color: white'>set -g terminal-overrides</code><br/><code style='color: white'>  \",xterm-256color:Tc\"</code>"]
+
+    Q1 -->|"YAML syntax error"| E4["🔍 YAML構文エラー<br/>━━━━━━<br/>原因：インデント・構文ミス"]
+    E4 --> S4["✅ 解決策：検証コマンド<br/><code style='color: white'>tmuxp debug-info</code><br/><br/>YAMLチェッカー使用<br/>・インデントは2スペース<br/>・タブ文字は使わない"]
+
+    Q1 -->|"Window/pane not created"| E5["🔍 ウィンドウ未作成<br/>━━━━━━<br/>原因：設定の記述ミス"]
+    E5 --> S5["✅ 解決策：最小構成で試す<br/><code style='color: white'>session_name: test</code><br/><code style='color: white'>windows:</code><br/><code style='color: white'>  - window_name: main</code><br/><code style='color: white'>    panes:</code><br/><code style='color: white'>      - echo \"test\"</code><br/><br/>徐々に設定を追加"]
+
+    style E1 fill:#fff3e0
+    style E2 fill:#fff3e0
+    style E3 fill:#fff3e0
+    style E4 fill:#fff3e0
+    style E5 fill:#fff3e0
+    style S1 fill:#e8f5e9
+    style S2 fill:#e8f5e9
+    style S3 fill:#e8f5e9
+    style S4 fill:#e8f5e9
+    style S5 fill:#e8f5e9
 ```
 
 ---
