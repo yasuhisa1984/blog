@@ -75,19 +75,18 @@
   }
 }
 
-/* ダークモードでの調整 */
+/* ダークモードでも白背景を維持（視認性重視） */
 @media (prefers-color-scheme: dark) {
   .mermaid {
-    /* ダークモード用の背景色 */
-    background-color: #2b2b2b;
-    border-color: var(--border);
+    background-color: #ffffff;
+    border-color: #cccccc;
   }
 }
 
 /* PaperModテーマのダークモード切り替えに対応 */
 [data-theme="dark"] .mermaid {
-  background-color: #2b2b2b;
-  border-color: var(--border);
+  background-color: #ffffff;
+  border-color: #cccccc;
 }
 
 /* ホバー時のスクロールヒント */
