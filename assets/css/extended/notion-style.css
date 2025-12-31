@@ -1,4 +1,4 @@
-/* Notion風シンプルリストデザイン - タイトルとカテゴリーのみ表示 */
+/* Notion風シンプルリストデザイン - カテゴリー別グループ表示 */
 
 /* ==========================================================================
    メインコンテナ
@@ -16,6 +16,38 @@ body.list .main {
 }
 
 /* ==========================================================================
+   カテゴリーセクション
+   ========================================================================== */
+
+body.list .category-section {
+  margin-bottom: 32px;
+}
+
+body.list .category-section:last-child {
+  margin-bottom: 0;
+}
+
+/* カテゴリー見出し */
+body.list .category-heading {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--primary);
+  margin: 0 0 8px 0;
+  padding: 8px 0;
+  border-bottom: 2px solid var(--primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* カテゴリー内の記事リスト */
+body.list .category-posts {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* ==========================================================================
    Notionシンプルリストアイテム
    ========================================================================== */
 
@@ -24,7 +56,7 @@ body.list .post-entry {
   display: flex;
   align-items: center;
   position: relative;
-  padding: 12px;
+  padding: 10px 12px;
   margin: 0;
 
   /* Notionライクな外観 */
@@ -36,7 +68,7 @@ body.list .post-entry {
 
   /* 高さ自動 */
   height: auto;
-  min-height: 52px;
+  min-height: 44px;
 }
 
 /* ホバー効果（Notionライク） */
@@ -62,13 +94,14 @@ body.list .post-entry .entry-header {
   flex: 1;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   min-width: 0; /* flexアイテムの省略表示に必要 */
 }
 
-body.list .post-entry .entry-header h2 {
-  font-size: 0.95rem;
-  font-weight: 500;
+body.list .post-entry .entry-header h2,
+body.list .post-entry .entry-header h3 {
+  font-size: 0.9rem;
+  font-weight: 400;
   line-height: 1.5;
   margin: 0;
   color: var(--content);
@@ -84,7 +117,8 @@ body.list .post-entry .entry-header h2 {
   min-width: 0;
 }
 
-body.list .post-entry:hover .entry-header h2 {
+body.list .post-entry:hover .entry-header h2,
+body.list .post-entry:hover .entry-header h3 {
   color: var(--primary);
 }
 
@@ -95,7 +129,7 @@ body.list .post-entry .entry-hint {
   padding: 2px 6px;
   background: rgba(251, 191, 36, 0.15);
   color: #d97706;
-  font-size: 0.7rem;
+  font-size: 0.65rem;
   border-radius: 3px;
   margin-left: 6px;
   font-weight: 500;
@@ -111,55 +145,10 @@ body.list .post-entry .entry-content {
 }
 
 /* ==========================================================================
-   フッター（カテゴリーのみ表示）
+   フッターを非表示（カテゴリーは見出しで表示）
    ========================================================================== */
 
 body.list .post-entry .entry-footer {
-  padding: 0;
-  margin: 0;
-  flex-shrink: 0;
-  border-top: none;
-  background: transparent;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-/* 日付・更新日・名前を非表示 */
-body.list .post-entry .entry-footer .post-meta {
-  display: none !important;
-}
-
-/* カテゴリー表示（Notionライク） */
-body.list .post-entry .entry-footer .post-tags {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin: 0;
-  flex-shrink: 0;
-}
-
-body.list .post-entry .entry-footer .post-tags a {
-  display: inline-flex;
-  align-items: center;
-  padding: 3px 10px;
-  background: rgba(0, 0, 0, 0.05);
-  color: rgba(0, 0, 0, 0.65);
-  font-size: 0.75rem;
-  font-weight: 500;
-  border-radius: 3px;
-  text-decoration: none;
-  transition: background 0.12s ease, color 0.12s ease;
-  white-space: nowrap;
-}
-
-body.list .post-entry .entry-footer .post-tags a:hover {
-  background: rgba(0, 0, 0, 0.1);
-  color: rgba(0, 0, 0, 0.8);
-}
-
-/* タグを非表示（カテゴリーのみ表示） */
-body.list .post-entry .entry-footer .tags-list {
   display: none !important;
 }
 
@@ -192,42 +181,8 @@ body.list .first-entry::before {
 
 body.list .first-entry .entry-header h1,
 body.list .first-entry .entry-header h2 {
-  font-size: 0.95rem;
-  font-weight: 500;
-}
-
-/* ==========================================================================
-   ページネーション
-   ========================================================================== */
-
-body.list .page-footer {
-  margin-top: 48px;
-  padding-top: 24px;
-  border-top: 1px solid rgba(0, 0, 0, 0.06);
-}
-
-body.list .pagination {
-  display: flex;
-  justify-content: center;
-  gap: 12px;
-}
-
-body.list .pagination a {
-  padding: 8px 16px;
-  background: var(--entry);
-  border: 1px solid rgba(0, 0, 0, 0.06);
-  border-radius: 3px;
-  color: var(--content);
-  text-decoration: none;
-  font-size: 0.875rem;
-  font-weight: 500;
-  transition: background 0.12s ease, box-shadow 0.12s ease;
-  box-shadow: rgba(0, 0, 0, 0.024) 0px 1px 2px;
-}
-
-body.list .pagination a:hover {
-  background: rgba(0, 0, 0, 0.03);
-  box-shadow: rgba(0, 0, 0, 0.08) 0px 2px 8px;
+  font-size: 0.9rem;
+  font-weight: 400;
 }
 
 /* ==========================================================================
@@ -235,7 +190,7 @@ body.list .pagination a:hover {
    ========================================================================== */
 
 body.list .page-header {
-  margin-bottom: 24px;
+  margin-bottom: 32px;
 }
 
 /* ==========================================================================
@@ -256,36 +211,34 @@ body.list .page-header {
     max-width: 100%;
   }
 
+  body.list .category-heading {
+    font-size: 1rem;
+  }
+
+  body.list .category-section {
+    margin-bottom: 24px;
+  }
+
   body.list .post-entry {
-    padding: 12px 8px;
-    min-height: 60px;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 8px;
+    padding: 10px 8px;
+    min-height: 48px;
   }
 
-  body.list .post-entry .entry-header {
-    width: 100%;
-  }
-
-  body.list .post-entry .entry-header h2 {
-    font-size: 0.9rem;
+  body.list .post-entry .entry-header h2,
+  body.list .post-entry .entry-header h3 {
+    font-size: 0.85rem;
     -webkit-line-clamp: 3; /* スマホでは3行まで */
-  }
-
-  body.list .post-entry .entry-footer {
-    width: 100%;
-  }
-
-  body.list .post-entry .entry-footer .post-tags a {
-    font-size: 0.7rem;
-    padding: 2px 8px;
   }
 }
 
 /* ==========================================================================
    ダークモード対応
    ========================================================================== */
+
+[data-theme="dark"] body.list .category-heading {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+}
 
 [data-theme="dark"] body.list .post-entry {
   background: transparent;
@@ -296,22 +249,14 @@ body.list .page-header {
   background: rgba(255, 255, 255, 0.05);
 }
 
-[data-theme="dark"] body.list .post-entry .entry-header h2 {
+[data-theme="dark"] body.list .post-entry .entry-header h2,
+[data-theme="dark"] body.list .post-entry .entry-header h3 {
   color: rgba(255, 255, 255, 0.9);
 }
 
-[data-theme="dark"] body.list .post-entry:hover .entry-header h2 {
+[data-theme="dark"] body.list .post-entry:hover .entry-header h2,
+[data-theme="dark"] body.list .post-entry:hover .entry-header h3 {
   color: var(--primary);
-}
-
-[data-theme="dark"] body.list .post-entry .entry-footer .post-tags a {
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.7);
-}
-
-[data-theme="dark"] body.list .post-entry .entry-footer .post-tags a:hover {
-  background: rgba(255, 255, 255, 0.15);
-  color: rgba(255, 255, 255, 0.9);
 }
 
 [data-theme="dark"] body.list .post-entry .entry-hint {
@@ -322,20 +267,4 @@ body.list .page-header {
 [data-theme="dark"] body.list .first-entry {
   background: transparent;
   border-bottom-color: rgba(255, 255, 255, 0.08);
-}
-
-[data-theme="dark"] body.list .pagination a {
-  background: #2f3437;
-  border-color: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.9);
-  box-shadow: rgba(0, 0, 0, 0.3) 0px 1px 3px;
-}
-
-[data-theme="dark"] body.list .pagination a:hover {
-  background: rgba(255, 255, 255, 0.05);
-  box-shadow: rgba(0, 0, 0, 0.5) 0px 4px 12px;
-}
-
-[data-theme="dark"] body.list .page-footer {
-  border-top-color: rgba(255, 255, 255, 0.08);
 }
