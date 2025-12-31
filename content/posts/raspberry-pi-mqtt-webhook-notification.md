@@ -90,6 +90,46 @@ graph LR
 | **Incoming Webhook** | Slack等がPOSTを受け付けるURL | SlackがWebhookを「受ける」側 |
 | **systemd** | Linuxのサービス管理機構 | 再起動時に自動起動させるために使う |
 
+### MQTT Pub/Sub の仕組み（図解）
+
+```mermaid
+graph TB
+    subgraph Publishers["発行者 (Publishers)"]
+        Pub1["センサー"]
+        Pub2["Mac/PC"]
+        Pub3["スマホ"]
+    end
+
+    subgraph Broker["MQTTブローカー (Mosquitto)"]
+        Topics["トピック管理<br/>sensor/temp<br/>alert/critical<br/>batch/completed"]
+    end
+
+    subgraph Subscribers["購読者 (Subscribers)"]
+        Sub1["通知スクリプト"]
+        Sub2["データ保存"]
+        Sub3["ダッシュボード"]
+    end
+
+    Pub1 -->|"publish<br/>sensor/temp"| Topics
+    Pub2 -->|"publish<br/>alert/critical"| Topics
+    Pub3 -->|"publish<br/>batch/completed"| Topics
+
+    Topics -->|"subscribe<br/>sensor/#"| Sub1
+    Topics -->|"subscribe<br/>alert/#"| Sub1
+    Topics -->|"subscribe<br/>#"| Sub2
+    Topics -->|"subscribe<br/>sensor/temp"| Sub3
+
+    style Publishers fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    style Broker fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    style Subscribers fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
+```
+
+**重要ポイント：**
+- PublisherとSubscriberは**直接通信しない**（必ずBrokerを経由）
+- トピックで**メッセージを分類**（`#`はワイルドカード）
+- 1つのメッセージを**複数のSubscriberが受信可能**
+- SubscriberがオフラインでもPublisherは送信できる（非同期）
+
 ### MQTTとSQSの違い（よく聞かれる）
 
 | 項目 | MQTT | Amazon SQS |
@@ -158,6 +198,51 @@ graph TB
 1. **入口（Webhook/MQTT Client）** は受け取ったら即座にBrokerへ投げる
 2. **Broker** は配送に専念（ロジックを持たない）
 3. **処理（Subscriber）** は通知先ごとに独立させる
+
+---
+
+## セットアップ全体フロー
+
+実装を始める前に、全体の流れを把握しましょう。
+
+```mermaid
+flowchart TD
+    Start["開始"] --> Step1["Step 1<br/>Mosquitto Brokerインストール"]
+    Step1 --> Step2["Step 2<br/>LAN接続許可設定"]
+    Step2 --> Step3["Step 3<br/>Mac/PCから動作確認<br/>(pub/sub)"]
+    Step3 --> Check1{動作OK?}
+
+    Check1 -->|No| Debug1["トラブルシューティング<br/>- ファイアウォール確認<br/>- ポート1883開放"]
+    Debug1 --> Step3
+
+    Check1 -->|Yes| Step4["Step 4<br/>Slack Incoming Webhook取得"]
+    Step4 --> Step5["Step 5<br/>Subscriber実装<br/>(Python/Bash)"]
+    Step5 --> Step6["Step 6<br/>Subscriber動作確認"]
+    Step6 --> Check2{Slack通知OK?}
+
+    Check2 -->|No| Debug2["トラブルシューティング<br/>- Webhook URL確認<br/>- ネットワーク疎通"]
+    Debug2 --> Step6
+
+    Check2 -->|Yes| Step7["Step 7<br/>systemdでサービス化"]
+    Step7 --> Step8["Step 8<br/>自動起動設定"]
+    Step8 --> Optional["オプション<br/>HTTP→MQTTブリッジ追加"]
+    Optional --> Complete["完成！"]
+
+    style Start fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
+    style Complete fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
+    style Debug1 fill:#ffebee,stroke:#f44336,stroke-width:2px
+    style Debug2 fill:#ffebee,stroke:#f44336,stroke-width:2px
+    style Step3 fill:#fff3e0,stroke:#f57c00
+    style Step6 fill:#fff3e0,stroke:#f57c00
+```
+
+**所要時間目安：**
+- Step 1〜3: 15分
+- Step 4〜6: 20分
+- Step 7〜8: 10分
+- オプション: 15分
+
+**合計: 約60分**（トラブルがなければ）
 
 ---
 
@@ -408,6 +493,47 @@ MQTTクライアントアプリをインストールする方法もあります�
 
 **結論：HTTP→MQTT変換をPi上に用意するのが最も汎用的。**
 
+### HTTP→MQTTブリッジの処理フロー
+
+```mermaid
+sequenceDiagram
+    participant Phone as スマホ/ブラウザ
+    participant Bridge as HTTP→MQTTブリッジ<br/>(FastAPI)
+    participant Broker as Mosquitto Broker
+    participant Sub as Subscriber
+    participant Slack as Slack
+
+    Phone->>Bridge: POST /publish<br/>{"topic": "alert/critical",<br/>"message": "在庫切れ"}
+
+    Bridge->>Bridge: リクエスト検証<br/>- topic存在確認<br/>- message長さ確認
+
+    alt 検証OK
+        Bridge->>Broker: MQTT publish<br/>topic: alert/critical<br/>payload: "在庫切れ"
+        Bridge-->>Phone: 200 OK<br/>{"status": "published"}
+
+        Note over Bridge,Broker: ここでHTTPリクエストは完了<br/>（Webhookは即座に返す）
+
+        Broker->>Sub: メッセージ配信<br/>topic: alert/critical
+        Sub->>Sub: Slack Webhook作成
+        Sub->>Slack: POST Webhook<br/>{"text": "🚨 在庫切れ"}
+        Slack-->>Sub: 200 OK
+
+        Note over Sub,Slack: Subscriberが非同期処理<br/>（ブリッジは関与しない）
+    else 検証NG
+        Bridge-->>Phone: 400 Bad Request<br/>{"error": "invalid topic"}
+    end
+
+    style Bridge fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    style Broker fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    style Sub fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
+```
+
+**重要な設計ポイント：**
+1. **ブリッジは即座に200を返す**（Slack通知完了を待たない）
+2. **検証は最小限**（topic/message存在確認のみ）
+3. **重い処理はSubscriberに委譲**（ブリッジは軽量に保つ）
+4. **エラーは4xx/5xxで明示**（デバッグしやすく）
+
 ### 簡易HTTP→MQTTブリッジ（FastAPI版）
 
 ```bash
@@ -503,6 +629,49 @@ curl -X POST http://192.168.1.100:8080/notify \
 
 ## systemdで常駐化
 
+### systemd設定の全体像
+
+```mermaid
+graph TB
+    subgraph Boot["Pi起動時"]
+        Start["システム起動"]
+        Network["ネットワーク起動<br/>(network.target)"]
+        Mosquitto["Mosquitto起動<br/>(mosquitto.service)"]
+    end
+
+    subgraph Services["MQTTサービス群"]
+        Subscriber["Subscriber起動<br/>(mqtt-to-slack.service)"]
+        Bridge["HTTP→MQTTブリッジ起動<br/>(http-to-mqtt.service)"]
+    end
+
+    subgraph Monitor["監視・自動再起動"]
+        Check{サービス<br/>異常終了?}
+        Restart["10秒後に自動再起動<br/>(RestartSec=10)"]
+    end
+
+    Start --> Network
+    Network --> Mosquitto
+    Mosquitto --> Subscriber
+    Mosquitto --> Bridge
+
+    Subscriber --> Check
+    Bridge --> Check
+    Check -->|Yes| Restart
+    Restart --> Subscriber
+    Restart --> Bridge
+    Check -->|No| Running["正常稼働"]
+
+    style Boot fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    style Services fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
+    style Monitor fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+```
+
+**systemdの利点：**
+- **自動起動**：Pi再起動時に自動で全サービス起動
+- **依存関係管理**：Mosquitto起動後にSubscriberを起動
+- **自動再起動**：異常終了時に自動復旧
+- **ログ管理**：journalctlで一元管理
+
 ### Subscriberのサービス化
 
 `/etc/systemd/system/mqtt-to-slack.service`:
@@ -587,6 +756,63 @@ sudo systemctl stop mqtt-to-slack
 
 ## 壊れやすいポイントと対策
 
+### トラブルシューティングフローチャート
+
+```mermaid
+flowchart TD
+    Problem["通知が届かない"] --> Check1{Brokerは<br/>起動している?}
+
+    Check1 -->|No| Fix1["sudo systemctl start mosquitto<br/>sudo systemctl enable mosquitto"]
+    Fix1 --> Solved1["解決"]
+
+    Check1 -->|Yes| Check2{Publishは<br/>成功している?}
+
+    Check2 -->|No| Check3{ファイアウォールで<br/>1883ポートが開いている?}
+    Check3 -->|No| Fix2["sudo ufw allow 1883<br/>または<br/>mosquitto.confを確認"]
+    Fix2 --> Solved1
+
+    Check3 -->|Yes| Check4{認証エラーが<br/>出ている?}
+    Check4 -->|Yes| Fix3["mosquitto.conf<br/>allow_anonymous true確認"]
+    Fix3 --> Solved1
+
+    Check2 -->|Yes| Check5{Subscriberは<br/>起動している?}
+
+    Check5 -->|No| Fix4["sudo systemctl start<br/>mqtt-to-slack"]
+    Fix4 --> Solved1
+
+    Check5 -->|Yes| Check6{Subscriberログに<br/>エラーがある?}
+
+    Check6 -->|Yes| Check7{Slack Webhook<br/>URLは正しい?}
+    Check7 -->|No| Fix5["環境変数を確認<br/>SLACK_WEBHOOK_URL"]
+    Fix5 --> Solved1
+
+    Check7 -->|Yes| Check8{ネットワークは<br/>疎通している?}
+    Check8 -->|No| Fix6["curl https://hooks.slack.com<br/>で疎通確認"]
+    Fix6 --> Solved1
+
+    Check8 -->|Yes| Fix7["QoS設定確認<br/>重複メッセージの可能性"]
+    Fix7 --> Solved1
+
+    Check6 -->|No| Fix8["topicが一致しているか確認<br/>pub: alert/critical<br/>sub: alert/#"]
+    Fix8 --> Solved1
+
+    style Problem fill:#ffebee,stroke:#f44336,stroke-width:2px
+    style Solved1 fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
+    style Fix1 fill:#fff3e0,stroke:#f57c00
+    style Fix2 fill:#fff3e0,stroke:#f57c00
+    style Fix3 fill:#fff3e0,stroke:#f57c00
+    style Fix4 fill:#fff3e0,stroke:#f57c00
+    style Fix5 fill:#fff3e0,stroke:#f57c00
+    style Fix6 fill:#fff3e0,stroke:#f57c00
+    style Fix7 fill:#fff3e0,stroke:#f57c00
+    style Fix8 fill:#fff3e0,stroke:#f57c00
+```
+
+**よくある問題トップ3：**
+1. **Mosquitto未起動**（`sudo systemctl status mosquitto`で確認）
+2. **topic名の不一致**（`alert/critical` vs `alert/#`）
+3. **Slack Webhook URL間違い**（環境変数を再確認）
+
 ### 1. 処理が重いとSubscriberが詰まる
 
 **問題：** Slack APIが遅い、またはタイムアウトするとメッセージが滞留
@@ -642,6 +868,63 @@ mosquitto_pub -h localhost -t "health/check" -m "ping" || \
 
 ## セキュリティ注意点
 
+### セキュリティレイヤー構成
+
+```mermaid
+graph TB
+    subgraph Internet["インターネット"]
+        Attacker["外部からの攻撃"]
+    end
+
+    subgraph Router["ルーター / ファイアウォール"]
+        FW["ファイアウォール<br/>1883/8080ポート<br/>❌ 外部公開しない"]
+    end
+
+    subgraph LAN["社内LAN（推奨構成）"]
+        subgraph Auth["認証レイヤー"]
+            MQTTAuth["MQTT認証<br/>mosquitto_passwd"]
+            HTTPAuth["HTTP Basic Auth<br/>（オプション）"]
+        end
+
+        subgraph App["アプリケーションレイヤー"]
+            Broker["Mosquitto Broker<br/>0.0.0.0:1883"]
+            Bridge["HTTP→MQTTブリッジ<br/>0.0.0.0:8080"]
+        end
+
+        subgraph Access["アクセス制御"]
+            AllowList["許可リスト<br/>192.168.1.0/24のみ"]
+        end
+    end
+
+    subgraph Public["公開する場合（非推奨）"]
+        TLS["TLS/SSL暗号化<br/>8883ポート"]
+        RateLimit["レート制限<br/>Fail2ban"]
+        VPN["VPN経由アクセス<br/>（強く推奨）"]
+    end
+
+    Attacker -.->|ブロック| FW
+    FW --> Router
+    Router --> AllowList
+    AllowList --> MQTTAuth
+    AllowList --> HTTPAuth
+    MQTTAuth --> Broker
+    HTTPAuth --> Bridge
+
+    style Internet fill:#ffebee,stroke:#f44336,stroke-width:2px
+    style FW fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    style LAN fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
+    style Auth fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    style Public fill:#fff3e0,stroke:#ff9800,stroke-width:2px
+```
+
+**セキュリティレベル別推奨構成：**
+
+| レベル | 構成 | 用途 |
+|--------|------|------|
+| **Level 1<br/>（最小）** | LAN限定 + `allow_anonymous true` | 社内PoC、個人利用 |
+| **Level 2<br/>（推奨）** | LAN限定 + MQTT認証 + IPフィルタ | 小規模運用 |
+| **Level 3<br/>（堅牢）** | VPN + TLS + 認証 + レート制限 | 外部アクセスが必要な場合 |
+
 ### LAN限定運用（推奨）
 
 - ルーターで1883/8080ポートを外部公開しない
@@ -681,6 +964,102 @@ mosquitto_pub -h 192.168.1.100 -u mqttuser -P password -t "notify/slack" -m "tes
 - TLS/SSL必須（Let's Encrypt + nginx リバースプロキシ）
 - API Key認証を追加
 - レートリミットを設定
+
+---
+
+## 実践ユースケース集
+
+この構成は以下のような現場で実際に活用できます。
+
+### ユースケース① 倉庫在庫管理
+
+```mermaid
+graph LR
+    subgraph Warehouse["倉庫"]
+        Sensor["在庫センサー<br/>（しきい値検知）"]
+        Pi["Raspberry Pi<br/>+ MQTT Broker"]
+    end
+
+    subgraph Office["事務所"]
+        Manager["在庫管理者<br/>（Slack受信）"]
+    end
+
+    Sensor -->|"MQTT publish<br/>topic: stock/low<br/>payload: A棚在庫5個"| Pi
+    Pi -->|"Subscriber→Webhook"| Manager
+
+    style Warehouse fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    style Office fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
+```
+
+**実装例：**
+- センサー：Arduinoでカウント → MQTTで送信
+- 通知：「🚨 A棚の在庫が5個まで減少しました」
+
+### ユースケース② バッチ処理完了通知
+
+```mermaid
+sequenceDiagram
+    participant Batch as バッチサーバー
+    participant Pi as Raspberry Pi<br/>(MQTT Broker)
+    participant Slack as 担当者<br/>(Slack)
+
+    Note over Batch: 深夜2時: バッチ開始
+    Batch->>Batch: データ処理実行
+
+    alt 成功
+        Batch->>Pi: MQTT publish<br/>topic: batch/success
+        Pi->>Slack: ✅ バッチ処理完了<br/>処理時間: 45分
+    else 失敗
+        Batch->>Pi: MQTT publish<br/>topic: batch/error
+        Pi->>Slack: ❌ バッチ処理失敗<br/>エラーログ確認必要
+    end
+
+    Note over Slack: 朝、出社時に確認
+```
+
+**実装例：**
+```bash
+# バッチスクリプトの最後に
+if [ $? -eq 0 ]; then
+  mosquitto_pub -h 192.168.1.100 -t "batch/success" -m "処理完了"
+else
+  mosquitto_pub -h 192.168.1.100 -t "batch/error" -m "処理失敗"
+fi
+```
+
+### ユースケース③ 受付呼び出しシステム
+
+```mermaid
+graph TB
+    subgraph Reception["受付"]
+        Button["呼び出しボタン<br/>（スマホショートカット）"]
+    end
+
+    subgraph Pi["Raspberry Pi"]
+        Bridge["HTTP→MQTTブリッジ"]
+        Broker["MQTT Broker"]
+        Sub["Subscriber"]
+    end
+
+    subgraph Backoffice["事務所・倉庫"]
+        Staff1["スタッフA<br/>（Slack）"]
+        Staff2["スタッフB<br/>（Slack）"]
+    end
+
+    Button -->|"HTTP POST<br/>http://pi.local:8080/notify"| Bridge
+    Bridge --> Broker
+    Broker --> Sub
+    Sub --> Staff1
+    Sub --> Staff2
+
+    style Reception fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    style Pi fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    style Backoffice fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
+```
+
+**実装例：**
+- iPhoneショートカット：ボタン1タップでHTTP POST
+- 通知：「📞 受付にお客様がいらっしゃいました」
 
 ---
 
