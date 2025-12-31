@@ -42,15 +42,55 @@ cover:
 
 ### 障害対応の基本フロー
 
+```mermaid
+flowchart TD
+    Start([🚨 障害発生])
+    Detect[1️⃣ 検知<br/>アラート・ユーザー報告]
+    Check[2️⃣ 状況確認<br/>ログ・メトリクス・エラー]
+    Impact[3️⃣ 影響範囲<br/>サービス・ユーザー数]
+    Emergency{深刻度は？}
+    Critical[🔴 Critical<br/>即座に応急処置]
+    High[🟡 High<br/>計画的に対応]
+    FirstAid[4️⃣ 応急処置<br/>被害拡大を防ぐ]
+    Investigate[5️⃣ 原因特定<br/>根本原因を調査]
+    Recovery[6️⃣ 復旧<br/>サービスを正常化]
+    Verify{正常化確認}
+    PostMortem[7️⃣ 振り返り<br/>再発防止策検討]
+    Document[📝 ドキュメント化<br/>ナレッジ蓄積]
+    End([✅ 完了])
+
+    Start --> Detect
+    Detect --> Check
+    Check --> Impact
+    Impact --> Emergency
+
+    Emergency -->|Critical<br/>サービス停止| Critical
+    Emergency -->|High<br/>一部影響| High
+
+    Critical --> FirstAid
+    High --> Investigate
+
+    FirstAid --> Investigate
+    Investigate --> Recovery
+    Recovery --> Verify
+
+    Verify -->|まだ異常| Investigate
+    Verify -->|正常化| PostMortem
+
+    PostMortem --> Document
+    Document --> End
+
+    style Start fill:#f44336,color:#fff
+    style Critical fill:#ff9800,color:#fff
+    style Recovery fill:#4caf50,color:#fff
+    style End fill:#2196f3,color:#fff
+    style Document fill:#9c27b0,color:#fff
 ```
-1. 検知    → アラート、ユーザー報告
-2. 状況確認 → ログ、メトリクス、エラーメッセージ
-3. 影響範囲 → どのサービス、何人に影響
-4. 応急処置 → 被害拡大を防ぐ
-5. 原因特定 → 根本原因を調査
-6. 復旧    → サービスを正常に戻す
-7. 振り返り → 再発防止策を検討
-```
+
+**重要ポイント：**
+- **深呼吸してから行動** — 焦りは禁物
+- **記録を残す** — 後で振り返れるように
+- **影響範囲を把握** — 優先順位を決める
 
 ---
 
@@ -80,13 +120,54 @@ UPDATE accounts SET balance = balance + 1000 WHERE id = 1;
 
 ### ロックの種類（MySQL InnoDB）
 
-| ロック種類 | 説明 | 競合 |
-|-----------|------|------|
-| **共有ロック（S）** | 読み取り用 | 排他ロックと競合 |
-| **排他ロック（X）** | 書き込み用 | 全てのロックと競合 |
-| **インテンションロック** | テーブルレベルの意思表示 | 特定の組み合わせで競合 |
-| **ギャップロック** | 範囲の隙間をロック | 挿入をブロック |
-| **ネクストキーロック** | 行+ギャップ | ファントムリード防止 |
+```mermaid
+graph TB
+    subgraph Locks["ロックの種類と用途"]
+        S["共有ロック（S）<br/>SELECT ... FOR SHARE<br/>🔵 読み取り専用"]
+        X["排他ロック（X）<br/>UPDATE/DELETE/INSERT<br/>🔴 書き込み専用"]
+        IS["インテンション共有（IS）<br/>テーブルレベル<br/>行ロックの予告"]
+        IX["インテンション排他（IX）<br/>テーブルレベル<br/>行ロックの予告"]
+        Gap["ギャップロック<br/>範囲の隙間<br/>🚫 INSERT防止"]
+        NK["ネクストキーロック<br/>行+ギャップ<br/>ファントムリード防止"]
+    end
+
+    subgraph Compat["ロック競合マトリックス"]
+        direction LR
+        M1["🟢 互換性あり<br/>（両方取得可）"]
+        M2["🔴 競合<br/>（待機が発生）"]
+    end
+
+    subgraph Matrix["主要な競合パターン"]
+        C1["S ⇔ S: 🟢 OK<br/>複数読み取り可能"]
+        C2["S ⇔ X: 🔴 競合<br/>読み書き排他"]
+        C3["X ⇔ X: 🔴 競合<br/>書き込み排他"]
+        C4["IS ⇔ IX: 🟢 OK<br/>意思表示のみ"]
+    end
+
+    style S fill:#2196f3,color:#fff
+    style X fill:#f44336,color:#fff
+    style IS fill:#e3f2fd
+    style IX fill:#ffebee
+    style Gap fill:#fff3e0
+    style NK fill:#e8f5e9
+    style M1 fill:#4caf50,color:#fff
+    style M2 fill:#ff9800,color:#fff
+```
+
+**ロック競合の完全マトリックス：**
+
+|  | S（共有） | X（排他） | IS | IX |
+|--|---------|---------|-----|-----|
+| **S** | 🟢 OK | 🔴 競合 | 🟢 OK | 🔴 競合 |
+| **X** | 🔴 競合 | 🔴 競合 | 🔴 競合 | 🔴 競合 |
+| **IS** | 🟢 OK | 🔴 競合 | 🟢 OK | 🟢 OK |
+| **IX** | 🔴 競合 | 🔴 競合 | 🟢 OK | 🟢 OK |
+
+**実務での使い分け：**
+- **SELECT ... FOR SHARE** → 共有ロック（複数読み可）
+- **SELECT ... FOR UPDATE** → 排他ロック（完全排他）
+- **UPDATE/DELETE** → 自動で排他ロック
+- **REPEATABLE READ** → ギャップロック・ネクストキーロック自動適用
 
 ---
 
@@ -96,18 +177,49 @@ UPDATE accounts SET balance = balance + 1000 WHERE id = 1;
 
 **デッドロック** は、2つ以上のトランザクションが互いのロック解放を待ち合う状態です。
 
+```mermaid
+sequenceDiagram
+    participant A as トランザクションA<br/>（送金処理）
+    participant Row1 as 行1<br/>（口座ID=1）
+    participant Row2 as 行2<br/>（口座ID=2）
+    participant B as トランザクションB<br/>（送金処理）
+
+    Note over A,B: 時刻 T0: 両方同時に開始
+
+    A->>Row1: 🔒 排他ロック取得<br/>UPDATE accounts WHERE id=1
+    Note over Row1: Aが保持中
+
+    B->>Row2: 🔒 排他ロック取得<br/>UPDATE accounts WHERE id=2
+    Note over Row2: Bが保持中
+
+    Note over A,B: 時刻 T1: 次の行をロックしようとする
+
+    A->>Row2: ロック要求<br/>UPDATE accounts WHERE id=2
+    Note over Row2: ❌ Bが保持中<br/>Aは待機...
+
+    B->>Row1: ロック要求<br/>UPDATE accounts WHERE id=1
+    Note over Row1: ❌ Aが保持中<br/>Bは待機...
+
+    Note over A,B: 💥 デッドロック発生！<br/>互いのロック解放を待ち合う
+
+    Note over A: ⚠️ MySQL自動検出<br/>→ Aをロールバック
+    Row1-->>A: ロック解放
+    Row1->>B: ✅ ロック取得成功
+    B->>Row2: ✅ 処理続行
+
+    Note over A: ERROR 1213: Deadlock found
+
+    style A fill:#ffebee
+    style B fill:#e8f5e9
+    style Row1 fill:#fff3e0
+    style Row2 fill:#e1f5fe
 ```
-トランザクションA              トランザクションB
-     ↓                              ↓
-行1をロック                    行2をロック
-     ↓                              ↓
-行2をロックしたい              行1をロックしたい
-（Bが持ってる）                （Aが持ってる）
-     ↓                              ↓
-   待機...                        待機...
-     ↓                              ↓
-      ←―――― デッドロック ――――→
-```
+
+**デッドロック発生の条件（4つ全て満たす）：**
+1. **相互排除** — リソースが排他的に使われる
+2. **保持と待機** — ロックを保持しながら別のロックを待つ
+3. **非プリエンプション** — ロックは自発的にしか解放されない
+4. **循環待機** — ロック待ちが循環する（A→B→A）
 
 ### デッドロックの検出
 
@@ -157,19 +269,85 @@ TRANSACTION 12346, ACTIVE 3 sec starting index read
 
 ### デッドロックの分析ポイント
 
+```mermaid
+flowchart TD
+    Start([🚨 デッドロック発生<br/>ERROR 1213])
+    Check1[📊 SHOW ENGINE<br/>INNODB STATUS]
+    Section[LATEST DETECTED<br/>DEADLOCK セクション確認]
+
+    Q1{デッドロックの<br/>詳細を確認}
+
+    Thread["1️⃣ トランザクション特定<br/>MySQL thread id<br/>query内容"]
+    Holds["2️⃣ 保持ロック確認<br/>HOLDS THE LOCK(S)<br/>どのテーブル・行"]
+    Waiting["3️⃣ 待機ロック確認<br/>WAITING FOR THIS LOCK<br/>何を待っているか"]
+    Rollback["4️⃣ ロールバック確認<br/>WE ROLL BACK TRANSACTION<br/>どちらが犠牲に"]
+
+    Analyze{原因分析}
+
+    Cause1["🔍 ロック順序不一致<br/>A: 行1→行2<br/>B: 行2→行1"]
+    Cause2["🔍 長時間トランザクション<br/>ロック保持時間が長い"]
+    Cause3["🔍 インデックス欠如<br/>不要な範囲ロック"]
+
+    Solution["💡 解決策適用"]
+
+    Fix1["✅ ロック順序統一<br/>常に小さいID順"]
+    Fix2["✅ トランザクション短縮<br/>外部APIは外で"]
+    Fix3["✅ インデックス追加<br/>必要な行だけロック"]
+    Fix4["✅ リトライ機構<br/>exponential backoff"]
+
+    Monitor["📈 監視設定<br/>デッドロック検知"]
+
+    Start --> Check1
+    Check1 --> Section
+    Section --> Q1
+
+    Q1 --> Thread
+    Q1 --> Holds
+    Q1 --> Waiting
+    Q1 --> Rollback
+
+    Thread --> Analyze
+    Holds --> Analyze
+    Waiting --> Analyze
+    Rollback --> Analyze
+
+    Analyze --> Cause1
+    Analyze --> Cause2
+    Analyze --> Cause3
+
+    Cause1 --> Fix1
+    Cause2 --> Fix2
+    Cause3 --> Fix3
+
+    Fix1 --> Fix4
+    Fix2 --> Fix4
+    Fix3 --> Fix4
+
+    Fix4 --> Solution
+    Solution --> Monitor
+
+    style Start fill:#f44336,color:#fff
+    style Check1 fill:#2196f3,color:#fff
+    style Solution fill:#4caf50,color:#fff
+    style Monitor fill:#9c27b0,color:#fff
+    style Cause1 fill:#ff9800,color:#fff
+    style Cause2 fill:#ff9800,color:#fff
+    style Cause3 fill:#ff9800,color:#fff
 ```
-1. どのトランザクションが関与しているか
+
+**分析の4つのステップ：**
+
+1. **どのトランザクションが関与しているか**
    → MySQL thread id, query を確認
 
-2. どのロックを持っているか
+2. **どのロックを持っているか**
    → HOLDS THE LOCK(S) を確認
 
-3. どのロックを待っているか
+3. **どのロックを待っているか**
    → WAITING FOR THIS LOCK を確認
 
-4. どちらがロールバックされたか
+4. **どちらがロールバックされたか**
    → WE ROLL BACK TRANSACTION を確認
-```
 
 ### デッドロックの解決策
 
@@ -539,7 +717,72 @@ GROUP BY
     state;
 ```
 
-## コネクション枯渇の原因
+## コネクション枯渇の原因と対策
+
+```mermaid
+graph TB
+    subgraph Problem["❌ コネクション枯渇の3大原因"]
+        P1["1️⃣ コネクションリーク<br/>conn.close() を忘れる<br/>with文を使わない"]
+        P2["2️⃣ プール設定ミス<br/>pool_size が小さすぎる<br/>max_overflow が0"]
+        P3["3️⃣ 長時間保持<br/>Sleep状態が多い<br/>wait_timeout が長すぎる"]
+    end
+
+    subgraph Symptom["🚨 症状"]
+        S1["ERROR 1040<br/>Too many connections"]
+        S2["Threads_connected<br/>= max_connections"]
+        S3["アプリケーション<br/>タイムアウト"]
+    end
+
+    subgraph Diagnosis["🔍 診断コマンド"]
+        D1["SHOW STATUS<br/>Threads_connected"]
+        D2["SHOW PROCESSLIST<br/>Sleep多数を確認"]
+        D3["ユーザーごと集計<br/>GROUP BY user"]
+    end
+
+    subgraph Emergency["🚑 緊急対応"]
+        E1["KILL [thread_id]<br/>不要なSleepを切断"]
+        E2["SET GLOBAL<br/>max_connections増加"]
+        E3["SET GLOBAL<br/>wait_timeout短縮"]
+    end
+
+    subgraph Solution["✅ 恒久対策"]
+        Sol1["with文で自動close<br/>try-finally必須"]
+        Sol2["コネクションプール<br/>適切なサイズ設定"]
+        Sol3["PgBouncer/ProxySQL<br/>コネクションプーリング"]
+        Sol4["監視アラート<br/>80%で警告"]
+    end
+
+    P1 --> S1
+    P2 --> S2
+    P3 --> S3
+
+    S1 --> D1
+    S2 --> D2
+    S3 --> D3
+
+    D1 --> Emergency
+    D2 --> Emergency
+    D3 --> Emergency
+
+    E1 --> Solution
+    E2 --> Solution
+    E3 --> Solution
+
+    Sol1 -.->|防止| P1
+    Sol2 -.->|防止| P2
+    Sol3 -.->|防止| P3
+    Sol4 -.->|早期検知| S1
+
+    style P1 fill:#ffebee
+    style P2 fill:#ffebee
+    style P3 fill:#ffebee
+    style S1 fill:#f44336,color:#fff
+    style S2 fill:#f44336,color:#fff
+    style S3 fill:#f44336,color:#fff
+    style Emergency fill:#ff9800,color:#fff
+    style Solution fill:#4caf50,color:#fff
+    style Sol4 fill:#2196f3,color:#fff
+```
 
 ### 1. コネクションリーク
 
@@ -679,6 +922,40 @@ engine = create_engine(
 
 ### 2. PgBouncer（PostgreSQL用プロキシ）
 
+```mermaid
+graph LR
+    subgraph Clients["アプリケーション層"]
+        C1[App Instance 1<br/>250 connections]
+        C2[App Instance 2<br/>250 connections]
+        C3[App Instance 3<br/>250 connections]
+        C4[App Instance 4<br/>250 connections]
+    end
+
+    subgraph PgBouncer["PgBouncer<br/>コネクションプール"]
+        PB[PgBouncer<br/>:6432<br/><br/>max_client_conn: 1000<br/>pool_mode: transaction<br/>default_pool_size: 20]
+    end
+
+    subgraph Database["PostgreSQL"]
+        DB[(PostgreSQL<br/>:5432<br/><br/>実際の接続: 20<br/>max_connections: 100)]
+    end
+
+    C1 -->|接続| PB
+    C2 -->|接続| PB
+    C3 -->|接続| PB
+    C4 -->|接続| PB
+
+    PB -->|プール済み<br/>20接続のみ| DB
+
+    Note1["💡 1000接続を20接続に集約<br/>50倍の効率化"]
+
+    style Clients fill:#e3f2fd
+    style PgBouncer fill:#4caf50,color:#fff
+    style Database fill:#2196f3,color:#fff
+    style Note1 fill:#fff3e0
+```
+
+**設定例：**
+
 ```ini
 # pgbouncer.ini
 [databases]
@@ -698,9 +975,9 @@ max_client_conn = 1000   # クライアントからの最大接続
 default_pool_size = 20   # DBへの実際の接続数
 ```
 
-```
-クライアント(1000接続) → PgBouncer → PostgreSQL(20接続)
-```
+**効果：**
+- **Before**: 1000アプリ接続 → 1000 DB接続 → 枯渇
+- **After**: 1000アプリ接続 → 20 DB接続 → 余裕
 
 ### 3. ProxySQL（MySQL用プロキシ）
 
@@ -830,18 +1107,61 @@ mysql < flashback.sql
 
 ### 概念
 
-```
-バックアップ            誤操作      現在
-    ↓                    ↓         ↓
-    ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓
-    ←―――バックアップ―――→←―バイナリログ―→
+```mermaid
+gantt
+    title ポイントインタイムリカバリ（PITR）のタイムライン
+    dateFormat HH:mm
+    axisFormat %H:%M
 
-    ↓ リストア
-    ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓
-    ↓ バイナリログを誤操作直前まで適用
-    ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓
-                        ↑ ここまで復旧
+    section データ状態
+    正常稼働          :done, normal1, 00:00, 10:00
+    誤操作発生        :crit, error, 10:15, 10:16
+    異常状態          :active, abnormal, 10:16, 12:00
+
+    section 復旧作業
+    バックアップ時点  :milestone, backup, 00:00, 0m
+    誤操作発生時刻    :milestone, mistake, 10:15, 0m
+    復旧目標時点      :milestone, target, 10:14, 0m
 ```
+
+```mermaid
+flowchart LR
+    subgraph Timeline["データベースのタイムライン"]
+        T0["00:00<br/>📦 フルバックアップ<br/>backup.sql"]
+        T1["00:00-10:14<br/>📝 バイナリログ<br/>mysql-bin.000123"]
+        T2["10:15<br/>💥 誤操作発生<br/>DELETE FROM users"]
+        T3["10:16-12:00<br/>❌ 異常状態<br/>データ欠損"]
+    end
+
+    subgraph Recovery["復旧プロセス"]
+        R1["1️⃣ バックアップリストア<br/>mysql < backup.sql<br/>→ 00:00の状態に戻る"]
+        R2["2️⃣ バイナリログ適用<br/>--stop-position=12345<br/>→ 10:14の状態まで進める"]
+        R3["✅ 復旧完了<br/>誤操作直前の状態"]
+    end
+
+    T0 --> T1
+    T1 --> T2
+    T2 --> T3
+
+    T0 -.->|リストア| R1
+    T1 -.->|部分適用| R2
+    R1 --> R2
+    R2 --> R3
+
+    style T0 fill:#4caf50,color:#fff
+    style T1 fill:#2196f3,color:#fff
+    style T2 fill:#f44336,color:#fff
+    style T3 fill:#ffebee
+    style R1 fill:#ff9800,color:#fff
+    style R2 fill:#ff9800,color:#fff
+    style R3 fill:#4caf50,color:#fff
+```
+
+**復旧の流れ：**
+1. **00:00のバックアップ** をリストア → データベースが00:00の状態に戻る
+2. **00:00〜10:14のバイナリログ** を適用 → 誤操作直前まで進める
+3. **10:15の誤操作** はスキップ
+4. **復旧完了** — 10:14時点のデータが復元される
 
 ### 手順（MySQL）
 
@@ -1160,6 +1480,51 @@ find "${BACKUP_DIR}" -name "*.sql" -mtime +30 -delete
 ---
 
 ## まとめ
+
+### データベース障害対応の全体マップ
+
+```mermaid
+mindmap
+  root((DB障害対応))
+    ロック問題
+      デッドロック
+        SHOW ENGINE INNODB STATUS
+        ロック順序統一
+        トランザクション短縮
+        リトライ機構
+      ロック待ちタイムアウト
+        innodb_lock_waits確認
+        長時間トランザクション特定
+        KILL実行
+        インデックス追加
+    コネクション枯渇
+      症状確認
+        Threads_connected
+        SHOW PROCESSLIST
+        Sleep多数
+      緊急対応
+        不要なKILL
+        max_connections増加
+        wait_timeout短縮
+      恒久対策
+        コネクションプール
+        PgBouncer/ProxySQL
+        監視アラート
+    データ復旧
+      バイナリログ
+        mysqlbinlog
+        位置特定
+        flashback
+      PITR
+        バックアップリストア
+        binlog部分適用
+        誤操作スキップ
+      予防策
+        トランザクション確認
+        論理削除
+        sql_safe_updates
+        定期バックアップ
+```
 
 ### ロック問題
 
