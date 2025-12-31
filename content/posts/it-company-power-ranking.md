@@ -2,6 +2,7 @@
 title: "数字でわかる！IT企業パワーランキング：時価総額とサーバー数で見る世界の覇者"
 date: 2026-01-01
 draft: false
+categories: ["IT業界"]
 tags: ["IT業界", "テック企業", "時価総額", "データセンター", "ビジネス分析"]
 description: "Apple、Microsoft、Google、Amazon、NVIDIAなど世界のテック巨人を時価総額・サーバー数・ユーザー規模で徹底比較。日本企業の立ち位置も含め、数字で見るIT業界の勢力図を解説します。"
 ---
