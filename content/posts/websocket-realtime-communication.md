@@ -32,10 +32,17 @@ cover:
 
 ### HTTPはリクエスト・レスポンス型
 
-```
-クライアント → リクエスト → サーバー
-クライアント ← レスポンス ← サーバー
-接続終了
+```mermaid
+sequenceDiagram
+    participant C as クライアント
+    participant S as サーバー
+
+    Note over C,S: HTTP: リクエスト・レスポンス型
+    C->>S: 1. リクエスト送信
+    S->>C: 2. レスポンス返却
+    Note over C,S: ❌ 接続終了（毎回接続を張り直す）
+
+    Note over C,S: <br/>問題：サーバーから能動的に送信できない
 ```
 
 HTTPでは、**クライアントからしかリクエストを送れない**。
@@ -83,9 +90,23 @@ async function longPoll() {
 
 ### WebSocketの解決策
 
-```
-クライアント ← → サーバー
-（常時接続、双方向）
+```mermaid
+sequenceDiagram
+    participant C as クライアント
+    participant S as サーバー
+
+    Note over C,S: WebSocket: 双方向常時接続
+    C->>S: ハンドシェイク（HTTP Upgrade）
+    S->>C: 101 Switching Protocols
+    Note over C,S: ✅ WebSocket接続確立
+
+    Note over C,S: 双方向でいつでも送信可能
+    C->>S: メッセージ1
+    S->>C: メッセージ2
+    S->>C: メッセージ3（サーバーから自発的に）
+    C->>S: メッセージ4
+
+    Note over C,S: 接続は維持される
 ```
 
 一度接続すれば、**双方向でいつでもデータを送れる**。
@@ -194,10 +215,26 @@ def notifications():
 
 ### 使い分けの指針
 
-```
-サーバー → クライアントだけ？ → SSE
-双方向が必要？ → WebSocket
-リアルタイム不要？ → ポーリング
+```mermaid
+flowchart TB
+    Start["リアルタイム通信が必要"] --> Q1{リアルタイム性が<br/>必要？}
+
+    Q1 -->|No| Polling["✅ ショートポーリング<br/>━━━━━━<br/>・実装が最も簡単<br/>・更新頻度が低い<br/>・レガシー環境"]
+
+    Q1 -->|Yes| Q2{通信方向は？}
+
+    Q2 -->|"サーバー→クライアントのみ"| SSE["✅ SSE<br/>(Server-Sent Events)<br/>━━━━━━<br/>・株価更新<br/>・ニュースフィード<br/>・通知<br/>・自動再接続機能"]
+
+    Q2 -->|双方向| Q3{レガシー環境<br/>対応が必要？}
+
+    Q3 -->|Yes| SocketIO["✅ Socket.IO<br/>━━━━━━<br/>・WebSocket非対応環境で<br/>  自動フォールバック<br/>・ルーム機能<br/>・自動再接続"]
+
+    Q3 -->|No| WS["✅ WebSocket<br/>━━━━━━<br/>・チャット<br/>・オンラインゲーム<br/>・共同編集<br/>・リアルタイムダッシュボード"]
+
+    style Polling fill:#e3f2fd
+    style SSE fill:#e8f5e9
+    style SocketIO fill:#fff3e0
+    style WS fill:#e8f5e9
 ```
 
 ---
@@ -469,6 +506,46 @@ const MessageTypes = {
 
 ### ACK（確認応答）パターン
 
+```mermaid
+sequenceDiagram
+    participant C as クライアント
+    participant S as サーバー
+    participant DB as データベース
+
+    Note over C,S: 正常フロー
+
+    C->>C: messageId生成<br/>(UUID)
+    C->>C: タイムアウトタイマー起動<br/>(5秒)
+    C->>S: send_message<br/>{messageId, content}
+
+    S->>DB: メッセージ保存
+    DB-->>S: 保存成功 (savedId)
+
+    S->>C: ack:messageId<br/>{success: true, savedId}
+    C->>C: タイムアウトキャンセル
+    C->>C: ✅ 送信完了
+
+    Note over C,S: <br/>エラーフロー（タイムアウト）
+
+    C->>C: messageId生成
+    C->>C: タイムアウトタイマー起動
+    C->>S: send_message<br/>{messageId, content}
+
+    Note over S: ❌ ネットワーク遅延で<br/>ACKが届かない
+
+    C->>C: ⏰ タイムアウト発生
+    C->>C: リトライまたは<br/>エラー通知
+
+    Note over C,S: <br/>エラーフロー（保存失敗）
+
+    C->>S: send_message
+    S->>DB: メッセージ保存
+    DB-->>S: ❌ 保存失敗
+
+    S->>C: ack:messageId<br/>{success: false, error}
+    C->>C: エラーハンドリング
+```
+
 ```javascript
 // クライアント側: メッセージ送信と確認
 function sendMessageWithAck(content) {
@@ -513,6 +590,42 @@ socket.on('send_message', async (data) => {
 ## 【実務】再接続とハートビート
 
 ### 自動再接続
+
+```mermaid
+flowchart TB
+    Start["🔌 WebSocket接続開始"] --> Connect["接続試行"]
+    Connect --> Success{"接続成功？"}
+
+    Success -->|Yes| Connected["✅ 接続確立<br/>━━━━━━<br/>・再接続カウンタをリセット<br/>・ハートビート開始"]
+
+    Success -->|No| Error["❌ 接続失敗"]
+
+    Connected --> Disconnect{"切断発生"}
+
+    Disconnect -->|"正常終了<br/>(code 1000)"| End["🏁 終了"]
+
+    Disconnect -->|異常終了| CheckAttempts{"最大再接続回数<br/>に達した？"}
+
+    Error --> CheckAttempts
+
+    CheckAttempts -->|Yes| Failed["⛔ 再接続諦め<br/>エラー通知"]
+
+    CheckAttempts -->|No| CalcDelay["⏱️ 再接続遅延を計算<br/>━━━━━━<br/>指数バックオフ:<br/><code style='color: white'>interval × 2^(attempts-1)</code><br/><br/>ジッター追加:<br/><code style='color: white'>delay × (0.5 + random × 0.5)</code>"]
+
+    CalcDelay --> Wait["⌛ 待機<br/>(1秒 → 2秒 → 4秒 → 8秒...)"]
+
+    Wait --> Retry["🔄 再接続試行<br/>(attempts + 1)"]
+
+    Retry --> Connect
+
+    style Start fill:#e3f2fd
+    style Connected fill:#e8f5e9
+    style Disconnect fill:#fff3e0
+    style Failed fill:#ffebee
+    style CalcDelay fill:#fff3e0
+    style Retry fill:#e3f2fd
+    style End fill:#e0e0e0
+```
 
 ```javascript
 class ReconnectingWebSocket {
@@ -628,19 +741,21 @@ setInterval(() => {
 
 ### 問題：サーバーが複数になると...
 
-```
-        ┌─────────────────────────────────────┐
-        │          Load Balancer              │
-        └──────┬──────────────┬───────────────┘
-               │              │
-        ┌──────▼────┐  ┌──────▼────┐
-        │ Server A  │  │ Server B  │
-        │ (User 1)  │  │ (User 2)  │
-        └───────────┘  └───────────┘
+```mermaid
+flowchart TB
+    User1["👤 User 1"] --> LB["⚖️ Load Balancer"]
+    User2["👤 User 2"] --> LB
+    LB --> ServerA["🖥️ Server A<br/>(User 1 接続)"]
+    LB --> ServerB["🖥️ Server B<br/>(User 2 接続)"]
 
-User 1 が User 2 にメッセージを送りたい
-→ Server A は User 2 の接続を知らない
-→ メッセージが届かない！
+    Note1["❌ 問題：<br/>User 1 → Server A → ❓<br/>Server A は User 2 の接続を知らない<br/>メッセージが届かない！"]
+
+    style User1 fill:#e3f2fd
+    style User2 fill:#e3f2fd
+    style LB fill:#fff3e0
+    style ServerA fill:#ffebee
+    style ServerB fill:#ffebee
+    style Note1 fill:#ffebee
 ```
 
 ### 解決策1: Redis Pub/Sub
@@ -671,24 +786,27 @@ function sendMessage(roomId, message) {
 }
 ```
 
-```
-        ┌─────────────────────────────────────┐
-        │          Load Balancer              │
-        └──────┬──────────────┬───────────────┘
-               │              │
-        ┌──────▼────┐  ┌──────▼────┐
-        │ Server A  │  │ Server B  │
-        │ (User 1)  │  │ (User 2)  │
-        └─────┬─────┘  └─────┬─────┘
-              │              │
-              └──────┬───────┘
-                     │
-              ┌──────▼──────┐
-              │   Redis     │
-              │  Pub/Sub    │
-              └─────────────┘
+#### Redis Pub/Subによる解決
 
-User 1 → Server A → Redis → Server B → User 2
+```mermaid
+flowchart TB
+    User1["👤 User 1"] --> LB["⚖️ Load Balancer"]
+    User2["👤 User 2"] --> LB
+    LB --> ServerA["🖥️ Server A<br/>(User 1 接続)"]
+    LB --> ServerB["🖥️ Server B<br/>(User 2 接続)"]
+
+    ServerA <--> Redis["🗄️ Redis Pub/Sub<br/>━━━━━━<br/>全サーバーでメッセージ共有"]
+    ServerB <--> Redis
+
+    Flow["✅ メッセージフロー：<br/>User 1 → Server A → Redis Publish<br/>→ Redis Subscribe → Server B → User 2"]
+
+    style User1 fill:#e3f2fd
+    style User2 fill:#e3f2fd
+    style LB fill:#fff3e0
+    style ServerA fill:#e8f5e9
+    style ServerB fill:#e8f5e9
+    style Redis fill:#fff3e0
+    style Flow fill:#e8f5e9
 ```
 
 ### 解決策2: Socket.IO + Redis Adapter
