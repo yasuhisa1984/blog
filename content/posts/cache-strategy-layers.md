@@ -653,48 +653,155 @@ sync; echo 3 > /proc/sys/vm/drop_caches
 
 キャッシュの実装方法には、主に4つのパターンがあります。用途に応じて使い分けることが重要です。
 
+### パターン比較表
+
+| パターン | 読み取り | 書き込み | 整合性 | 複雑さ | 用途 |
+|---------|---------|---------|-------|-------|------|
+| **Cache-Aside** | アプリが制御 | DB→キャッシュ削除 | △ | 低 | 最も一般的 |
+| **Read-Through** | キャッシュが代行 | N/A | ○ | 中 | 読み取り専用 |
+| **Write-Through** | N/A | 同期的 | ◎ | 中 | 強い整合性 |
+| **Write-Back** | N/A | 非同期的 | △ | 高 | 高速書き込み |
+
+---
+
+### ① Cache-Aside（最も一般的）
+
+**アプリケーションがキャッシュの読み書きを明示的に制御する**パターン。最もシンプルで柔軟性が高い。
+
 ```mermaid
-graph TB
-    subgraph CacheAside["Cache-Aside（最も一般的）"]
-        CA1[アプリ] -->|1. 確認| CA_Cache[キャッシュ]
-        CA_Cache -->|2. ミス| CA1
-        CA1 -->|3. 取得| CA_DB[DB]
-        CA_DB -->|4. 返却| CA1
-        CA1 -->|5. 保存| CA_Cache
-    end
+flowchart LR
+    App[アプリ]
+    Cache[キャッシュ]
+    DB[(DB)]
 
-    subgraph ReadThrough["Read-Through（キャッシュが代行）"]
-        RT1[アプリ] -->|1. リクエスト| RT_Cache[キャッシュ]
-        RT_Cache -->|2. ミス時| RT_DB[DB]
-        RT_DB -->|3. 取得| RT_Cache
-        RT_Cache -->|4. 返却| RT1
-    end
+    App -->|1. 確認| Cache
+    Cache -->|2. ミス| App
+    App -->|3. 取得| DB
+    DB -->|4. 返却| App
+    App -->|5. 保存| Cache
 
-    subgraph WriteThrough["Write-Through（同期的）"]
-        WT1[アプリ] -->|1. 書込| WT_Cache[キャッシュ]
-        WT_Cache -->|2. 同期書込| WT_DB[DB]
-        WT_DB -->|3. 完了| WT_Cache
-        WT_Cache -->|4. 完了| WT1
-    end
-
-    subgraph WriteBack["Write-Back（非同期）"]
-        WB1[アプリ] -->|1. 書込| WB_Cache[キャッシュ]
-        WB_Cache -->|2. 即座に完了| WB1
-        WB_Cache -.->|3. 非同期書込| WB_DB[DB]
-    end
-
-    style CacheAside fill:#e1f5ff,stroke:#01579b
-    style ReadThrough fill:#e8f5e9,stroke:#1b5e20
-    style WriteThrough fill:#fff3e0,stroke:#e65100
-    style WriteBack fill:#fce4ec,stroke:#880e4f
+    style App fill:#e1f5ff,stroke:#01579b
+    style Cache fill:#fff3e0,stroke:#f57c00
+    style DB fill:#f3e5f5,stroke:#7b1fa2
 ```
 
-| パターン | 読み取り | 書き込み | 整合性 | 複雑さ |
-|---------|---------|---------|-------|-------|
-| **Cache-Aside** | アプリが制御 | DB→キャッシュ削除 | △ | 低 |
-| **Read-Through** | キャッシュが代行 | N/A | ○ | 中 |
-| **Write-Through** | N/A | 同期的 | ◎ | 中 |
-| **Write-Back** | N/A | 非同期的 | △ | 高 |
+**特徴：**
+- アプリが全てのフローを制御
+- キャッシュミス時のみDB読み取り
+- 書き込み時はDBを更新してキャッシュを削除（または更新）
+
+**メリット：**
+- 実装がシンプル
+- キャッシュ障害時もDBから読める（フォールバック可能）
+
+**デメリット：**
+- キャッシュとDBの不整合が起きやすい
+- アプリ側でキャッシュロジックを実装する必要がある
+
+---
+
+### ② Read-Through（キャッシュが代行）
+
+**キャッシュがDBアクセスを代行する**パターン。アプリはキャッシュのみにアクセス。
+
+```mermaid
+flowchart LR
+    App[アプリ]
+    Cache[キャッシュ<br/>レイヤー]
+    DB[(DB)]
+
+    App -->|1. リクエスト| Cache
+    Cache -->|2. ミス時<br/>自動取得| DB
+    DB -->|3. 取得| Cache
+    Cache -->|4. 返却| App
+
+    style App fill:#e8f5e9,stroke:#1b5e20
+    style Cache fill:#fff3e0,stroke:#f57c00
+    style DB fill:#f3e5f5,stroke:#7b1fa2
+```
+
+**特徴：**
+- アプリはキャッシュとしか通信しない
+- キャッシュミス時、キャッシュレイヤーが自動的にDBから取得
+- キャッシュに取得ロジックが組み込まれている
+
+**メリット：**
+- アプリのコードがシンプル
+- キャッシュロジックの一元管理
+
+**デメリット：**
+- キャッシュレイヤーの実装が複雑
+- キャッシュ障害時にDBに直接アクセスできない
+
+---
+
+### ③ Write-Through（同期的書き込み）
+
+**キャッシュとDBの両方に同期的に書き込む**パターン。強い整合性が保証される。
+
+```mermaid
+flowchart LR
+    App[アプリ]
+    Cache[キャッシュ]
+    DB[(DB)]
+
+    App -->|1. 書込| Cache
+    Cache -->|2. 同期書込| DB
+    DB -->|3. 完了| Cache
+    Cache -->|4. 完了| App
+
+    style App fill:#fff3e0,stroke:#e65100
+    style Cache fill:#fff3e0,stroke:#f57c00
+    style DB fill:#f3e5f5,stroke:#7b1fa2
+```
+
+**特徴：**
+- キャッシュとDBが常に同期
+- 書き込み完了はDB書き込み完了後
+- キャッシュとDBの整合性が保証される
+
+**メリット：**
+- データの整合性が高い
+- キャッシュが常に最新
+
+**デメリット：**
+- 書き込みが遅い（DBの速度に依存）
+- DBへの負荷が高い
+
+---
+
+### ④ Write-Back（非同期書き込み）
+
+**キャッシュに書き込んだ後、非同期的にDBに反映する**パターン。高速書き込みが可能。
+
+```mermaid
+flowchart LR
+    App[アプリ]
+    Cache[キャッシュ]
+    DB[(DB)]
+
+    App -->|1. 書込| Cache
+    Cache -->|2. 即座に完了| App
+    Cache -.->|3. 非同期<br/>バッチ書込| DB
+
+    style App fill:#fce4ec,stroke:#880e4f
+    style Cache fill:#fff3e0,stroke:#f57c00
+    style DB fill:#f3e5f5,stroke:#7b1fa2
+```
+
+**特徴：**
+- キャッシュに書き込んだら即座に完了
+- DBへの書き込みは後で非同期的に実行
+- 書き込みバッファとして機能
+
+**メリット：**
+- 書き込みが非常に高速
+- DBへの書き込みをバッチ化できる（効率的）
+
+**デメリット：**
+- キャッシュ障害時にデータロスの可能性
+- 整合性の保証が弱い
+- 実装が複雑
 
 ---
 
