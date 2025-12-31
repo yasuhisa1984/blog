@@ -64,23 +64,29 @@ tmux new -s myapp
 
 ```mermaid
 flowchart TB
-    subgraph Manual["❌ 手動セットアップ（毎朝5分）"]
+    subgraph Manual[" "]
+        direction TB
+        ManualTitle["❌ 手動セットアップ（毎朝5分）"]
         M1["1. ターミナル起動"] --> M2["2. プロジェクトに移動<br/><code style='color: white'>cd ~/projects/my-app</code>"]
         M2 --> M3["3. tmuxセッション作成<br/><code style='color: white'>tmux new -s myapp</code>"]
-        M3 --> M4["4. ウィンドウ分割<br/><code style='color: white'>Ctrl-b %</code><br/><code style='color: white'>Ctrl-b \"</code>"]
+        M3 --> M4["4. ウィンドウ分割<br/><code style='color: white'>Ctrl-b %</code><br/><code style='color: white'>Ctrl-b</code> <code style='color: white'>\"</code>"]
         M4 --> M5["5. 各ペインでコマンド実行<br/>・vim起動<br/>・サーバー起動<br/>・ログ監視<br/>・DB接続"]
         M5 --> M6["⏱️ 5分後<br/>━━━━━━<br/>やっと開発開始"]
+        ManualTitle ~~~ M1
     end
 
-    subgraph Auto["✅ tmuxp自動化（3秒）"]
+    subgraph Auto[" "]
+        direction TB
+        AutoTitle["✅ tmuxp自動化（3秒）"]
         A1["1. プロジェクトに移動<br/><code style='color: white'>cd ~/projects/my-app</code>"]
         A2["2. コマンド一発<br/><code style='color: white'>tmuxp load .</code>"]
         A3["⚡ 3秒後<br/>━━━━━━<br/>すぐに開発開始"]
 
+        AutoTitle ~~~ A1
         A1 --> A2 --> A3
     end
 
-    Manual -.->|.tmuxp.yaml作成で| Auto
+    Manual -.-> Auto
 
     TimeCalc["💡 時間の計算<br/>━━━━━━<br/>5分/日 × 20営業日 = 100分/月<br/>100分/月 × 12ヶ月 = 20時間/年<br/><br/>20時間 = 小さな機能1つ分"]
 
@@ -576,22 +582,22 @@ set -g terminal-overrides ",xterm-256color:Tc"
 flowchart TB
     Start["❌ tmuxpでエラー"] --> Q1{どんなエラー？}
 
-    Q1 -->|"Session already exists"| E1["🔍 セッション存在エラー<br/>━━━━━━<br/>原因：同名セッションが起動中"]
+    Q1 -->|セッション存在| E1["🔍 セッション存在エラー<br/>━━━━━━<br/>原因：同名セッションが起動中"]
     E1 --> S1["✅ 解決策"]
     S1 --> S1A["1. 既存セッション終了<br/><code style='color: white'>tmux kill-session -t my-app</code><br/><code style='color: white'>tmuxp load .</code>"]
     S1 --> S1B["2. 別名で起動<br/><code style='color: white'>tmuxp load . -s my-app-2</code>"]
 
-    Q1 -->|"Command not executed"| E2["🔍 コマンド未実行エラー<br/>━━━━━━<br/>原因：シェル初期化前に<br/>コマンド送信"]
+    Q1 -->|コマンド未実行| E2["🔍 コマンド未実行エラー<br/>━━━━━━<br/>原因：シェル初期化前に<br/>コマンド送信"]
     E2 --> S2["✅ 解決策：sleep追加<br/><code style='color: white'>panes:</code><br/><code style='color: white'>  - shell_command:</code><br/><code style='color: white'>      - sleep 1</code><br/><code style='color: white'>      - npm run dev</code>"]
 
-    Q1 -->|"文字化け"| E3["🔍 文字化けエラー<br/>━━━━━━<br/>原因：tmux文字コード設定"]
-    E3 --> S3["✅ 解決策：~/.tmux.conf<br/><code style='color: white'>set -g default-terminal</code><br/><code style='color: white'>  \"screen-256color\"</code><br/><code style='color: white'>set -g terminal-overrides</code><br/><code style='color: white'>  \",xterm-256color:Tc\"</code>"]
+    Q1 -->|文字化け| E3["🔍 文字化けエラー<br/>━━━━━━<br/>原因：tmux文字コード設定"]
+    E3 --> S3["✅ 解決策<br/><code style='color: white'>~/.tmux.conf に設定</code><br/><code style='color: white'>set -g default-terminal</code><br/><code style='color: white'>screen-256color</code>"]
 
-    Q1 -->|"YAML syntax error"| E4["🔍 YAML構文エラー<br/>━━━━━━<br/>原因：インデント・構文ミス"]
+    Q1 -->|YAML構文エラー| E4["🔍 YAML構文エラー<br/>━━━━━━<br/>原因：インデント・構文ミス"]
     E4 --> S4["✅ 解決策：検証コマンド<br/><code style='color: white'>tmuxp debug-info</code><br/><br/>YAMLチェッカー使用<br/>・インデントは2スペース<br/>・タブ文字は使わない"]
 
-    Q1 -->|"Window/pane not created"| E5["🔍 ウィンドウ未作成<br/>━━━━━━<br/>原因：設定の記述ミス"]
-    E5 --> S5["✅ 解決策：最小構成で試す<br/><code style='color: white'>session_name: test</code><br/><code style='color: white'>windows:</code><br/><code style='color: white'>  - window_name: main</code><br/><code style='color: white'>    panes:</code><br/><code style='color: white'>      - echo \"test\"</code><br/><br/>徐々に設定を追加"]
+    Q1 -->|ウィンドウ未作成| E5["🔍 ウィンドウ未作成<br/>━━━━━━<br/>原因：設定の記述ミス"]
+    E5 --> S5["✅ 解決策：最小構成で試す<br/><code style='color: white'>session_name: test</code><br/><code style='color: white'>windows:</code><br/><code style='color: white'>  - window_name: main</code><br/><code style='color: white'>    panes:</code><br/><code style='color: white'>      - echo test</code><br/><br/>徐々に設定を追加"]
 
     style E1 fill:#fff3e0
     style E2 fill:#fff3e0
