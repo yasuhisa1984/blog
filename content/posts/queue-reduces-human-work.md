@@ -64,37 +64,42 @@ flowchart TB
 
 ### 同期処理 vs 非同期処理の決定的な違い
 
+#### ❌ 同期処理（キューなし）: 合計28秒拘束
+
 ```mermaid
-graph TB
-    subgraph Sync["❌ 同期処理（キューなし）: 合計28秒拘束"]
-        S1[👤 ユーザー] -->|請求書作成| S2[システム]
-        S2 -->|顧客データ取得| S3[外部サービス]
-        S3 -->|5秒待機...| S4[データ返却]
-        S4 -->|PDF生成依頼| S5[外部サービス]
-        S5 -->|20秒待機...| S6[PDF完成]
-        S6 -->|メール送信| S7[外部サービス]
-        S7 -->|3秒待機...| S8[送信完了]
-        S8 -->|処理完了| S9[👤 やっと解放]
-        SNote["⏱️ 28秒間ずっと画面の前で待機<br/>❌ 他の仕事ができない"]
-    end
+graph TD
+    S1[👤 ユーザー] -->|請求書作成| S2[システム]
+    S2 -->|顧客データ取得| S3[外部サービス]
+    S3 -->|5秒待機...| S4[データ返却]
+    S4 -->|PDF生成依頼| S5[外部サービス]
+    S5 -->|20秒待機...| S6[PDF完成]
+    S6 -->|メール送信| S7[外部サービス]
+    S7 -->|3秒待機...| S8[送信完了]
+    S8 -->|処理完了| S9[👤 やっと解放]
 
-    subgraph Async["✅ 非同期処理（キューあり）: 0.1秒で解放"]
-        A1[👤 ユーザー] -->|請求書作成| A2[システム]
-        A2 -->|キューに登録| A3[(Queue)]
-        A2 -->|受付完了 0.1秒| A4[👤 即座に解放]
-        A4 -->|別の作業開始| A5[他の200件も登録可能]
-        A3 -.->|バックグラウンド| A6[Worker]
-        A6 -.->|処理完了後| A7[📧 通知]
-        ANote["⏱️ 0.1秒で解放<br/>✅ 他の仕事ができる"]
-    end
-
-    style Sync fill:#ffebee,stroke:#c62828
-    style Async fill:#e8f5e9,stroke:#2e7d32
-    style A4 fill:#4caf50,color:#fff
-    style S9 fill:#ffcdd2
-    style SNote fill:#fff3e0
-    style ANote fill:#c8e6c9
+    style S1 fill:#ffcdd2,stroke:#c62828
+    style S9 fill:#ffcdd2,stroke:#c62828
 ```
+
+**⏱️ 28秒間ずっと画面の前で待機 → 他の仕事ができない**
+
+#### ✅ 非同期処理（キューあり）: 0.1秒で解放
+
+```mermaid
+graph TD
+    A1[👤 ユーザー] -->|請求書作成| A2[システム]
+    A2 -->|キューに登録| A3[(Queue)]
+    A2 -->|受付完了 0.1秒| A4[👤 即座に解放]
+    A4 -->|別の作業開始| A5[他の200件も登録可能]
+    A3 -.->|バックグラウンド| A6[Worker]
+    A6 -.->|処理完了後| A7[📧 通知]
+
+    style A1 fill:#c8e6c9,stroke:#2e7d32
+    style A4 fill:#4caf50,stroke:#2e7d32,color:#fff
+    style A5 fill:#c8e6c9,stroke:#2e7d32
+```
+
+**⏱️ 0.1秒で解放 → 他の仕事ができる**
 
 **同期処理の問題点：**
 - ユーザーが処理完了まで待機（28秒）
@@ -160,49 +165,45 @@ PDFの生成には30秒かかるかもしれない。外部サービスとの連
 
 ### 判断回数の劇的な削減
 
+#### ❌ キューなし: 200件処理で200回判断
+
 ```mermaid
-graph TB
-    subgraph Without["❌ キューなし: 200件処理で200回判断"]
-        W_Start[200件開始]
-        W_Loop[1件ずつ処理]
-        W_Error1[エラー発生<br/>👤 再試行？]
-        W_Error2[タイムアウト<br/>👤 続行？]
-        W_Error3[データ不整合<br/>👤 スキップ？]
-        W_Error4[…エラーの度に<br/>👤 判断を要求]
-        W_Result[結果: 195件成功<br/>5件失敗]
+graph TD
+    W_Start[200件開始] --> W_Loop[1件ずつ処理]
+    W_Loop --> W_Error1[エラー発生<br/>👤 再試行？]
+    W_Loop --> W_Error2[タイムアウト<br/>👤 続行？]
+    W_Loop --> W_Error3[データ不整合<br/>👤 スキップ？]
+    W_Error1 --> W_Next[次の処理へ]
+    W_Error2 --> W_Next
+    W_Error3 --> W_Next
+    W_Next --> W_Loop
+    W_Loop --> W_Result[結果: 195件成功<br/>5件失敗]
 
-        W_Start --> W_Loop
-        W_Loop --> W_Error1 & W_Error2 & W_Error3 & W_Error4
-        W_Error1 & W_Error2 & W_Error3 & W_Error4 --> W_Result
-
-        W_Note["👤 判断回数: 約200回<br/>⏱️ 拘束時間: 2時間<br/>😫 ストレス: MAX"]
-    end
-
-    subgraph With["✅ キューあり: 200件処理で5回判断"]
-        Q_Start[200件をキューに投入]
-        Q_Quick[即座に受付完了]
-        Q_Free[👤 別の作業へ]
-        Q_Process[バックグラウンド処理<br/>自動リトライ3回]
-        Q_DLQ[致命的エラーのみ<br/>失敗キューへ]
-        Q_Notify[📧 完了通知:<br/>195件成功 5件要確認]
-        Q_Review[👤 5件だけ確認]
-
-        Q_Start --> Q_Quick
-        Q_Quick --> Q_Free
-        Q_Start --> Q_Process
-        Q_Process --> Q_DLQ
-        Q_DLQ --> Q_Notify
-        Q_Notify --> Q_Review
-
-        Q_Note["👤 判断回数: 5回<br/>⏱️ 拘束時間: 10分<br/>😊 ストレス: 低"]
-    end
-
-    style Without fill:#ffebee,stroke:#c62828
-    style With fill:#e8f5e9,stroke:#2e7d32
-    style W_Note fill:#fff3e0,stroke:#f57f17
-    style Q_Note fill:#c8e6c9,stroke:#388e3c
-    style Q_Free fill:#4caf50,color:#fff
+    style W_Start fill:#ffcdd2,stroke:#c62828
+    style W_Error1 fill:#fff3e0,stroke:#f57f17
+    style W_Error2 fill:#fff3e0,stroke:#f57f17
+    style W_Error3 fill:#fff3e0,stroke:#f57f17
 ```
+
+**👤 判断回数: 約200回 ｜ ⏱️ 拘束時間: 2時間 ｜ 😫 ストレス: MAX**
+
+#### ✅ キューあり: 200件処理で5回判断
+
+```mermaid
+graph TD
+    Q_Start[200件をキューに投入] --> Q_Quick[即座に受付完了]
+    Q_Quick --> Q_Free[👤 別の作業へ]
+    Q_Start -.-> Q_Process[バックグラウンド処理<br/>自動リトライ3回]
+    Q_Process -.-> Q_DLQ[致命的エラーのみ<br/>失敗キューへ]
+    Q_DLQ -.-> Q_Notify[📧 完了通知:<br/>195件成功 5件要確認]
+    Q_Notify --> Q_Review[👤 5件だけ確認]
+
+    style Q_Start fill:#c8e6c9,stroke:#2e7d32
+    style Q_Free fill:#4caf50,stroke:#2e7d32,color:#fff
+    style Q_Review fill:#c8e6c9,stroke:#2e7d32
+```
+
+**👤 判断回数: 5回 ｜ ⏱️ 拘束時間: 10分 ｜ 😊 ストレス: 低**
 
 **キューがない世界：**
 - 処理の途中で問題が起きるたびに人間が呼び出される
