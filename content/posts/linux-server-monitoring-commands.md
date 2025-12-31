@@ -43,23 +43,41 @@ cover:
 
 障害対応で最も重要なのは、**いきなり細部を見ない**こと。
 
-```
-1. 全体像を掴む（何がおかしいか？）
-2. ボトルネックを特定する（どこがおかしいか？）
-3. 原因を深掘りする（なぜおかしいか？）
-4. 対処する（どう直すか？）
+```mermaid
+flowchart TB
+    Start["🚨 障害・パフォーマンス問題発生"] --> Step1["1️⃣ 全体像を掴む<br/>何がおかしいか？<br/><code style='color: white'>uptime</code> / <code style='color: white'>top</code>"]
+    Step1 --> Step2["2️⃣ ボトルネックを特定する<br/>どこがおかしいか？<br/>CPU / メモリ / ディスク / ネットワーク"]
+    Step2 --> Step3["3️⃣ 原因を深掘りする<br/>なぜおかしいか？<br/>プロセス特定 / ログ調査"]
+    Step3 --> Step4["4️⃣ 対処する<br/>どう直すか？<br/>プロセス再起動 / 設定変更 / リソース増強"]
+    Step4 --> End["✅ 問題解決"]
+
+    style Start fill:#ffebee
+    style End fill:#e8f5e9
+    style Step1 fill:#e3f2fd
+    style Step2 fill:#e3f2fd
+    style Step3 fill:#e3f2fd
+    style Step4 fill:#e3f2fd
 ```
 
 ### リソースの4大要素
 
 サーバーの問題は、ほぼこの4つに集約されます：
 
-| リソース | 枯渇すると起きること |
-|----------|----------------------|
-| **CPU** | 処理が遅くなる、タイムアウト |
-| **メモリ** | OOM Killer、スワップで激遅 |
-| **ディスク** | 書き込み失敗、I/O待ち |
-| **ネットワーク** | 接続失敗、タイムアウト |
+```mermaid
+flowchart TB
+    Problem["⚠️ サーバー問題発生"] --> Check{どのリソースが<br/>ボトルネック？}
+
+    Check -->|CPU| CPU["💻 CPU枯渇<br/>━━━━━━<br/>症状：処理が遅い、タイムアウト<br/>確認：<code style='color: white'>uptime</code> / <code style='color: white'>top</code><br/>対策：プロセス最適化、スケールアップ"]
+    Check -->|メモリ| MEM["🧠 メモリ枯渇<br/>━━━━━━<br/>症状：OOM Killer、スワップで激遅<br/>確認：<code style='color: white'>free -h</code> / <code style='color: white'>vmstat</code><br/>対策：メモリ増設、プロセス削減"]
+    Check -->|ディスク| DISK["💾 ディスク枯渇<br/>━━━━━━<br/>症状：書き込み失敗、I/O待ち<br/>確認：<code style='color: white'>df -h</code> / <code style='color: white'>iostat</code><br/>対策：容量確保、高速ディスク"]
+    Check -->|ネットワーク| NET["🌐 ネットワーク枯渇<br/>━━━━━━<br/>症状：接続失敗、タイムアウト<br/>確認：<code style='color: white'>ss -s</code> / <code style='color: white'>nethogs</code><br/>対策：帯域増強、接続数制限"]
+
+    style Problem fill:#ffebee
+    style CPU fill:#fff3e0
+    style MEM fill:#fff3e0
+    style DISK fill:#fff3e0
+    style NET fill:#fff3e0
+```
 
 ---
 
@@ -116,18 +134,17 @@ $ uptime
 
 ### 負荷の傾向を読む
 
-```
-load average: 8.00, 2.00, 1.00
-              ↑     ↑     ↑
-              急上昇中！（直近で何かが起きた）
+```mermaid
+flowchart TB
+    Check["<code style='color: white'>uptime</code>で確認"] --> Pattern{Load Averageの<br/>パターンは？}
 
-load average: 1.00, 2.00, 8.00
-              ↑     ↑     ↑
-              収束中（過去に何かあったが落ち着いた）
+    Pattern -->|"1分 > 5分 > 15分"| Rising["📈 急上昇中<br/>━━━━━━<br/>例：8.00, 2.00, 1.00<br/><br/>🔍 直近で何かが起きた<br/>・新しいプロセスが起動<br/>・突発的なアクセス増<br/>・バッチ処理開始"]
+    Pattern -->|"1分 < 5分 < 15分"| Falling["📉 収束中<br/>━━━━━━<br/>例：1.00, 2.00, 8.00<br/><br/>✅ 過去に問題があったが<br/>現在は落ち着いている<br/>・問題は自然解決<br/>・対処が効いている"]
+    Pattern -->|"1分 ≒ 5分 ≒ 15分"| Stable["📊 定常的に高い<br/>━━━━━━<br/>例：4.00, 4.00, 4.00<br/><br/>⚠️ 慢性的な問題<br/>・常時負荷が高い<br/>・リソース不足<br/>・要チューニング or 増強"]
 
-load average: 4.00, 4.00, 4.00
-              ↑     ↑     ↑
-              定常的に高い（慢性的な問題）
+    style Rising fill:#ffebee
+    style Falling fill:#e8f5e9
+    style Stable fill:#fff3e0
 ```
 
 ---
@@ -1083,6 +1100,38 @@ $ dmesg | grep -i "eth0"
 
 ## シナリオ1: 「サーバーが重い」
 
+### 調査フロー
+
+```mermaid
+flowchart TB
+    Start["🐌 サーバーが重い"] --> Step1["1️⃣ 全体像を把握<br/><code style='color: white'>uptime</code>"]
+    Step1 --> Load["Load Average確認"]
+    Load --> Step2["2️⃣ 原因を切り分け<br/><code style='color: white'>top</code>"]
+
+    Step2 --> Check{何が高い？}
+
+    Check -->|"%CPU が高い"| CPU["3a. CPU使用率が高い<br/>━━━━━━<br/><code style='color: white'>ps aux --sort=-%cpu | head -5</code>"]
+    Check -->|"%wa が高い"| IOWAIT["3b. I/O wait が高い<br/>━━━━━━<br/><code style='color: white'>iostat -xz 1</code><br/><code style='color: white'>iotop -o</code>"]
+    Check -->|"%st が高い"| STEAL["3c. steal が高い<br/>━━━━━━<br/>VMホストが過負荷<br/>（クラウド環境）"]
+
+    CPU --> CPUAction["💻 対策<br/>・プロセス最適化<br/>・不要プロセス停止<br/>・スケールアップ"]
+    IOWAIT --> IOAction["💾 対策<br/>・遅いクエリ最適化<br/>・ログ出力削減<br/>・高速ディスクへ変更"]
+    STEAL --> STAction["☁️ 対策<br/>・インスタンスタイプ変更<br/>・専用インスタンスへ移行<br/>・クラウド業者に問い合わせ"]
+
+    CPUAction --> End["✅ 解決"]
+    IOAction --> End
+    STAction --> End
+
+    style Start fill:#ffebee
+    style End fill:#e8f5e9
+    style CPU fill:#fff3e0
+    style IOWAIT fill:#fff3e0
+    style STEAL fill:#fff3e0
+    style CPUAction fill:#e3f2fd
+    style IOAction fill:#e3f2fd
+    style STAction fill:#e3f2fd
+```
+
 ### 調査手順
 
 ```bash
@@ -1109,6 +1158,46 @@ $ iotop -o      # どのプロセスがI/Oを使っているか
 
 ## シナリオ2: 「メモリ不足」
 
+### 調査フロー
+
+```mermaid
+flowchart TB
+    Start["🧠 メモリ不足の疑い"] --> Step1["1️⃣ メモリ状況確認<br/><code style='color: white'>free -h</code><br/>available を見る"]
+
+    Step1 --> Step2["2️⃣ スワップ確認<br/><code style='color: white'>vmstat 1</code><br/>si/so が0以外なら危険"]
+
+    Step2 --> Check{スワップが<br/>使われている？}
+
+    Check -->|Yes| Critical["⚠️ 危険な状態<br/>スワップ使用中"]
+    Check -->|No| Step3["3️⃣ メモリ使用プロセス特定"]
+
+    Critical --> Step3
+    Step3 --> Process["<code style='color: white'>ps aux --sort=-%mem | head -10</code>"]
+
+    Process --> Step4["4️⃣ OOM Killer確認<br/><code style='color: white'>dmesg | grep -i 'out of memory'</code>"]
+
+    Step4 --> OOM{OOM Killerが<br/>発動した？}
+
+    OOM -->|Yes| OOMAction["💥 OOM発生<br/>・メモリ増設必須<br/>・プロセス削減<br/>・メモリリーク調査"]
+    OOM -->|No| Step5["5️⃣ プロセス別詳細<br/><code style='color: white'>cat /proc/[PID]/status</code>"]
+
+    Step5 --> Action["📊 対策<br/>・大量メモリ使用プロセス特定<br/>・プロセス最適化 or 停止<br/>・メモリ増設検討"]
+
+    OOMAction --> End["✅ 対策実施"]
+    Action --> End
+
+    style Start fill:#ffebee
+    style End fill:#e8f5e9
+    style Critical fill:#ffebee
+    style OOMAction fill:#ffebee
+    style Action fill:#e3f2fd
+    style Step1 fill:#e3f2fd
+    style Step2 fill:#e3f2fd
+    style Step3 fill:#e3f2fd
+    style Step4 fill:#e3f2fd
+    style Step5 fill:#e3f2fd
+```
+
 ### 調査手順
 
 ```bash
@@ -1133,6 +1222,42 @@ $ cat /proc/1234/status | grep -E "(VmRSS|VmSwap)"
 ---
 
 ## シナリオ3: 「ディスクが満杯」
+
+### 調査フロー
+
+```mermaid
+flowchart TB
+    Start["💾 ディスクが満杯"] --> Step1["1️⃣ パーティション確認<br/><code style='color: white'>df -h</code>"]
+
+    Step1 --> Step2["2️⃣ 大きいディレクトリ探索<br/><code style='color: white'>du -h --max-depth=1 / | sort -hr</code>"]
+
+    Step2 --> Step3["3️⃣ 大きいファイル探索<br/><code style='color: white'>find / -type f -size +1G</code>"]
+
+    Step3 --> Step4["4️⃣ 削除済み but 開かれているファイル<br/><code style='color: white'>lsof | grep deleted</code>"]
+
+    Step4 --> Check{原因は？}
+
+    Check -->|"ログ肥大"| Log["📋 ログ問題<br/>・logrotate設定<br/>・古いログ削除<br/><code style='color: white'>ls -lh /var/log/</code>"]
+    Check -->|"Docker"| Docker["🐳 Docker問題<br/><code style='color: white'>docker system prune</code><br/>・未使用イメージ削除<br/>・コンテナクリーンアップ"]
+    Check -->|"一時ファイル"| Tmp["🗑️ 一時ファイル<br/><code style='color: white'>/tmp</code> クリーンアップ<br/><code style='color: white'>/var/tmp</code> クリーンアップ"]
+    Check -->|"コアダンプ"| Core["💥 コアダンプ<br/><code style='color: white'>/var/crash</code> 確認<br/>不要なdump削除"]
+
+    Log --> End["✅ 容量確保"]
+    Docker --> End
+    Tmp --> End
+    Core --> End
+
+    style Start fill:#ffebee
+    style End fill:#e8f5e9
+    style Log fill:#fff3e0
+    style Docker fill:#fff3e0
+    style Tmp fill:#fff3e0
+    style Core fill:#fff3e0
+    style Step1 fill:#e3f2fd
+    style Step2 fill:#e3f2fd
+    style Step3 fill:#e3f2fd
+    style Step4 fill:#e3f2fd
+```
 
 ### 調査手順
 
@@ -1166,6 +1291,51 @@ $ ls -lh /var/log/
 
 ## シナリオ4: 「接続できない」
 
+### 調査フロー
+
+```mermaid
+flowchart TB
+    Start["🚫 接続できない"] --> Step1["1️⃣ サービス起動確認<br/><code style='color: white'>systemctl status nginx</code>"]
+
+    Step1 --> Q1{サービスは<br/>起動している？}
+
+    Q1 -->|No| StartService["サービス起動<br/><code style='color: white'>systemctl start nginx</code>"]
+    Q1 -->|Yes| Step2["2️⃣ ポートLISTEN確認<br/><code style='color: white'>ss -tlnp | grep :80</code>"]
+
+    StartService --> Step2
+
+    Step2 --> Q2{ポートが<br/>LISTEN？}
+
+    Q2 -->|No| Config["設定ミス<br/>・bind address確認<br/>・ポート番号確認<br/>・設定ファイル確認"]
+    Q2 -->|Yes| Step3["3️⃣ ファイアウォール確認<br/><code style='color: white'>iptables -L -n</code><br/><code style='color: white'>ufw status</code>"]
+
+    Step3 --> Q3{ファイアウォールが<br/>ブロック？}
+
+    Q3 -->|Yes| Firewall["ファイアウォール許可<br/><code style='color: white'>ufw allow 80</code><br/><code style='color: white'>iptables ...</code>"]
+    Q3 -->|No| Step4["4️⃣ 接続数上限確認<br/><code style='color: white'>ss -s</code>"]
+
+    Firewall --> Step4
+
+    Step4 --> Q4{接続数が<br/>上限？}
+
+    Q4 -->|Yes| ConnLimit["接続数制限<br/>・max connections 増加<br/>・接続タイムアウト設定<br/>・不要接続クローズ"]
+    Q4 -->|No| Step5["5️⃣ ログ確認<br/><code style='color: white'>journalctl -u nginx --since '10m ago'</code>"]
+
+    Step5 --> LogAction["ログから原因特定<br/>・エラーメッセージ確認<br/>・アクセスログ確認"]
+
+    Config --> End["✅ 接続可能"]
+    ConnLimit --> End
+    LogAction --> End
+
+    style Start fill:#ffebee
+    style End fill:#e8f5e9
+    style StartService fill:#e3f2fd
+    style Config fill:#fff3e0
+    style Firewall fill:#fff3e0
+    style ConnLimit fill:#fff3e0
+    style LogAction fill:#e3f2fd
+```
+
 ### 調査手順
 
 ```bash
@@ -1189,6 +1359,41 @@ $ journalctl -u nginx --since "10 minutes ago"
 ---
 
 ## シナリオ5: 「特定のプロセスが暴走」
+
+### 調査フロー
+
+```mermaid
+flowchart TB
+    Start["🔥 プロセスが暴走"] --> Step1["1️⃣ プロセス特定<br/><code style='color: white'>top</code> (Pキーでソート)<br/>または<br/><code style='color: white'>ps aux --sort=-%cpu</code>"]
+
+    Step1 --> Step2["2️⃣ プロセス詳細確認<br/><code style='color: white'>ps -p [PID] -o pid,ppid,user,%cpu,%mem,start,cmd</code>"]
+
+    Step2 --> Step3["3️⃣ 何をしているか調査<br/><code style='color: white'>strace -p [PID]</code>"]
+
+    Step3 --> Step4["4️⃣ 開いているファイル確認<br/><code style='color: white'>lsof -p [PID]</code>"]
+
+    Step4 --> Check{停止すべき？}
+
+    Check -->|"正常終了"| Kill["<code style='color: white'>kill [PID]</code><br/>SIGTERM（15）で正常終了"]
+    Check -->|"応答しない"| Kill9["<code style='color: white'>kill -9 [PID]</code><br/>SIGKILL（9）で強制終了"]
+    Check -->|"様子見"| Monitor["継続監視<br/><code style='color: white'>watch -n 1 'ps -p [PID] -o %cpu,%mem'</code>"]
+
+    Kill --> Verify["プロセス終了確認<br/><code style='color: white'>ps -p [PID]</code>"]
+    Kill9 --> Verify
+    Monitor --> Check
+
+    Verify --> End["✅ 対処完了"]
+
+    style Start fill:#ffebee
+    style End fill:#e8f5e9
+    style Kill fill:#fff3e0
+    style Kill9 fill:#ffebee
+    style Monitor fill:#e3f2fd
+    style Step1 fill:#e3f2fd
+    style Step2 fill:#e3f2fd
+    style Step3 fill:#e3f2fd
+    style Step4 fill:#e3f2fd
+```
 
 ### 調査手順
 
@@ -1249,6 +1454,53 @@ $ df -h | awk '$5 > 80 {print "WARNING:", $0}'
 
 # スワップが使われているかチェック
 $ [ $(free | awk '/Swap/{print $3}') -gt 0 ] && echo "SWAP IN USE"
+```
+
+---
+
+## 監視コマンド選択フローチャート
+
+```mermaid
+flowchart TB
+    Start["🔍 何を調査する？"] --> Category{調査カテゴリ}
+
+    Category -->|"全体状況"| Overall["📊 全体状況<br/>━━━━━━<br/><code style='color: white'>uptime</code> - 負荷確認<br/><code style='color: white'>top / htop</code> - リアルタイム監視"]
+
+    Category -->|CPU| CPU["💻 CPU<br/>━━━━━━<br/>基本：<code style='color: white'>top</code> / <code style='color: white'>uptime</code><br/>詳細：<code style='color: white'>mpstat -P ALL 1</code><br/>統計：<code style='color: white'>vmstat 1</code>"]
+
+    Category -->|メモリ| MEM["🧠 メモリ<br/>━━━━━━<br/>基本：<code style='color: white'>free -h</code><br/>詳細：<code style='color: white'>cat /proc/meminfo</code><br/>スワップ：<code style='color: white'>vmstat 1</code> (si/so)"]
+
+    Category -->|ディスク| DISK["💾 ディスク<br/>━━━━━━<br/>容量：<code style='color: white'>df -h</code><br/>使用量：<code style='color: white'>du -sh /*</code><br/>I/O：<code style='color: white'>iostat -xz 1</code><br/>プロセス別：<code style='color: white'>iotop -o</code>"]
+
+    Category -->|ネットワーク| NET["🌐 ネットワーク<br/>━━━━━━<br/>接続状況：<code style='color: white'>ss -s</code><br/>ポート：<code style='color: white'>ss -tlnp</code><br/>帯域：<code style='color: white'>iftop / nethogs</code><br/>パケット：<code style='color: white'>tcpdump</code>"]
+
+    Category -->|プロセス| PROC["⚙️ プロセス<br/>━━━━━━<br/>一覧：<code style='color: white'>ps aux</code><br/>特定：<code style='color: white'>pgrep / pkill</code><br/>詳細：<code style='color: white'>lsof -p [PID]</code><br/>追跡：<code style='color: white'>strace -p [PID]</code>"]
+
+    Category -->|ログ| LOG["📋 ログ<br/>━━━━━━<br/>systemd：<code style='color: white'>journalctl -u [service]</code><br/>カーネル：<code style='color: white'>dmesg -T</code><br/>ファイル：<code style='color: white'>tail -f /var/log/...</code><br/>検索：<code style='color: white'>grep -i error</code>"]
+
+    Overall --> Next{さらに<br/>深掘り？}
+    CPU --> Next
+    MEM --> Next
+    DISK --> Next
+    NET --> Next
+    PROC --> Next
+    LOG --> Next
+
+    Next -->|Yes| Detailed["🔬 詳細調査<br/>・問題プロセス特定<br/>・ログ詳細確認<br/>・リソース履歴確認"]
+    Next -->|No| End["✅ 調査完了"]
+
+    Detailed --> End
+
+    style Start fill:#e3f2fd
+    style End fill:#e8f5e9
+    style Overall fill:#fff3e0
+    style CPU fill:#fff3e0
+    style MEM fill:#fff3e0
+    style DISK fill:#fff3e0
+    style NET fill:#fff3e0
+    style PROC fill:#fff3e0
+    style LOG fill:#fff3e0
+    style Detailed fill:#e3f2fd
 ```
 
 ---
