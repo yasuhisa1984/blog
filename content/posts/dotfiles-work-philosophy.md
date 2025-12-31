@@ -77,25 +77,62 @@ ls -a     # dotfiles（隠しファイル）も表示
 ln -s ~/dotfiles/.vimrc ~/.vimrc
 ```
 
+#### dotfiles管理のワークフロー
+
+```mermaid
+flowchart LR
+    Create["📝 設定ファイル作成<br/>━━━━━━<br/>.vimrc<br/>.tmux.conf<br/>.zshrc"] --> Repo["📁 Gitリポジトリ化<br/>━━━━━━<br/><code style='color: white'>~/dotfiles/</code><br/><br/><code style='color: white'>git init</code><br/><code style='color: white'>git add .</code><br/><code style='color: white'>git commit</code>"]
+
+    Repo --> Remote["☁️ GitHub/GitLab<br/>にプッシュ<br/>━━━━━━<br/>バックアップ<br/>どこからでもアクセス"]
+
+    Repo --> Link["🔗 シンボリックリンク<br/>━━━━━━<br/><code style='color: white'>ln -s ~/dotfiles/.vimrc</code><br/><code style='color: white'>      ~/.vimrc</code><br/><br/>ホームディレクトリから<br/>dotfilesを参照"]
+
+    Link --> NewPC["💻 新しいPC<br/>━━━━━━<br/>1. <code style='color: white'>git clone</code><br/>2. <code style='color: white'>./install.sh</code><br/><br/>3秒で環境再現！"]
+
+    Remote -.->|clone| NewPC
+
+    Update["🔄 設定を更新"] --> Repo
+    Repo -.-> Remote
+
+    style Create fill:#e3f2fd
+    style Repo fill:#fff3e0
+    style Remote fill:#e8f5e9
+    style Link fill:#fff3e0
+    style NewPC fill:#e8f5e9
+    style Update fill:#e3f2fd
+```
+
 ---
 
 ## 僕の開発環境の全体像
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                      WezTerm                            │
-│                   （ターミナル）                          │
-│  ┌───────────────────────────────────────────────────┐  │
-│  │                     tmux                          │  │
-│  │              （ターミナル多重化）                    │  │
-│  │  ┌─────────────────┬─────────────────────────┐   │  │
-│  │  │                 │                         │   │  │
-│  │  │    Neovim       │      シェル (zsh)       │   │  │
-│  │  │  （エディタ）     │    ログ・コマンド実行    │   │  │
-│  │  │                 │                         │   │  │
-│  │  └─────────────────┴─────────────────────────┘   │  │
-│  └───────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph WezTerm["🖥️ WezTerm（ターミナルエミュレータ）"]
+        WT["作業場の「建物」<br/>━━━━━━<br/>・GPU加速<br/>・Lua設定<br/>・クロスプラットフォーム"]
+    end
+
+    subgraph Tmux["📦 tmux（ターミナル多重化）"]
+        TM["作業机の「配置」<br/>━━━━━━<br/>・セッション管理<br/>・画面分割<br/>・永続化"]
+    end
+
+    subgraph Apps["🛠️ アプリケーション"]
+        direction LR
+        NV["📝 Neovim<br/>━━━━━━<br/>メインの「道具」<br/><br/>・テキスト編集<br/>・LSP<br/>・プラグイン"]
+        ZSH["⚡ zsh<br/>━━━━━━<br/>コマンドを打つ「場所」<br/><br/>・ログ監視<br/>・コマンド実行<br/>・Git操作"]
+    end
+
+    WezTerm --> Tmux
+    Tmux --> Apps
+
+    Note["💡 レイヤー構造<br/>━━━━━━<br/>外側ほど「入れ物」<br/>内側ほど「作業内容」<br/><br/>壊れても各層で復旧可能"]
+
+    style WezTerm fill:#e3f2fd
+    style Tmux fill:#fff3e0
+    style Apps fill:#e8f5e9
+    style NV fill:#c8e6c9
+    style ZSH fill:#c8e6c9
+    style Note fill:#fffde7
 ```
 
 | ツール | 役割 | 一言で |
@@ -180,6 +217,50 @@ tmuxを使うと:
 | **ウィンドウ** | タブのようなもの |
 | **ペイン** | 画面の分割 |
 
+##### セッション・ウィンドウ・ペインの階層構造
+
+```mermaid
+flowchart TB
+    subgraph Session["📁 セッション（work）"]
+        Note1["プロジェクト全体のまとまり<br/>SSHが切れても生き続ける"]
+
+        subgraph Window1["📑 ウィンドウ1（editor）"]
+            W1["タブのようなもの<br/><code style='color: white'>Ctrl+b c</code> で作成"]
+
+            subgraph Panes1["画面分割"]
+                direction LR
+                P1["📝 ペイン1<br/>━━━━━━<br/>Neovim<br/>エディタ"]
+                P2["⚡ ペイン2<br/>━━━━━━<br/>シェル<br/>コマンド実行"]
+            end
+        end
+
+        subgraph Window2["📑 ウィンドウ2（server）"]
+            W2["<code style='color: white'>Ctrl+b n</code> で切り替え"]
+
+            subgraph Panes2["画面分割"]
+                direction LR
+                P3["🖥️ ペイン1<br/>━━━━━━<br/>サーバー起動<br/><code style='color: white'>npm run dev</code>"]
+                P4["📊 ペイン2<br/>━━━━━━<br/>ログ監視<br/><code style='color: white'>tail -f app.log</code>"]
+            end
+        end
+    end
+
+    Detach["🔌 セッションから離脱<br/><code style='color: white'>Ctrl+b d</code><br/><br/>→ 作業は続行中"]
+    Attach["🔗 セッションに再接続<br/><code style='color: white'>tmux attach -t work</code><br/><br/>→ 作業の続きから"]
+
+    Session -.-> Detach
+    Detach -.-> Attach
+    Attach -.-> Session
+
+    style Session fill:#e3f2fd
+    style Window1 fill:#fff3e0
+    style Window2 fill:#fff3e0
+    style Panes1 fill:#e8f5e9
+    style Panes2 fill:#e8f5e9
+    style Detach fill:#ffebee
+    style Attach fill:#c8e6c9
+```
+
 #### 最大のメリット：セッションの永続化
 
 ```bash
@@ -261,6 +342,36 @@ Vimには「モード」という概念があります：
 | **ビジュアル** | 選択 | `v`, `V` |
 | **コマンド** | 保存・終了など | `:` |
 
+##### Vimのモード遷移
+
+```mermaid
+flowchart TB
+    Normal["⚙️ ノーマルモード<br/>━━━━━━<br/>移動・編集コマンドを実行<br/><br/><code style='color: white'>dd</code> - 行削除<br/><code style='color: white'>yy</code> - 行コピー<br/><code style='color: white'>p</code> - 貼り付け<br/><code style='color: white'>u</code> - 元に戻す"]
+
+    Insert["✏️ インサートモード<br/>━━━━━━<br/>文字を入力する<br/><br/>普通のエディタと同じように<br/>タイピングできる"]
+
+    Visual["📋 ビジュアルモード<br/>━━━━━━<br/>テキストを選択する<br/><br/><code style='color: white'>v</code> - 文字選択<br/><code style='color: white'>V</code> - 行選択"]
+
+    Command["💻 コマンドモード<br/>━━━━━━<br/>ファイル操作<br/><br/><code style='color: white'>:w</code> - 保存<br/><code style='color: white'>:q</code> - 終了<br/><code style='color: white'>:wq</code> - 保存して終了"]
+
+    Normal -->|"<code style='color: white'>i</code> - カーソル位置から<br/><code style='color: white'>a</code> - カーソル後ろから<br/><code style='color: white'>o</code> - 新しい行"| Insert
+    Insert -->|"<code style='color: white'>Esc</code>"| Normal
+
+    Normal -->|"<code style='color: white'>v</code> - 文字選択<br/><code style='color: white'>V</code> - 行選択"| Visual
+    Visual -->|"<code style='color: white'>Esc</code>"| Normal
+
+    Normal -->|"<code style='color: white'>:</code>"| Command
+    Command -->|"<code style='color: white'>Enter</code> or <code style='color: white'>Esc</code>"| Normal
+
+    Note["💡 ポイント<br/>━━━━━━<br/>・すべての道はノーマルモードに通ず<br/>・迷ったら <code style='color: white'>Esc</code> を連打<br/>・ノーマルモードが基準地点"]
+
+    style Normal fill:#e3f2fd
+    style Insert fill:#fff3e0
+    style Visual fill:#e8f5e9
+    style Command fill:#ffe0b2
+    style Note fill:#fffde7
+```
+
 最初は戸惑いますが、慣れると**「書く」と「動かす」を分離**できることの快適さが分かります。
 
 **公式サイト:** https://neovim.io/
@@ -299,6 +410,42 @@ Vimには「モード」という概念があります：
 でも今は、**メンテナンスコスト**を考えて、土台は既存のものを使い、**カスタマイズは最小限**にしています。
 
 これは「**過剰設計を避ける**」という仕事観とも一致しています。
+
+##### カスタマイズレベルの比較
+
+```mermaid
+flowchart LR
+    subgraph Full["🔧 フルスクラッチ<br/>━━━━━━<br/>全部自分で作る"]
+        F1["⏱️ セットアップ時間<br/><code style='color: white'>数週間〜数ヶ月</code>"]
+        F2["🎯 自由度<br/><code style='color: white'>100%</code>"]
+        F3["💰 メンテナンスコスト<br/><code style='color: white'>高い</code><br/><br/>プラグイン更新で壊れる<br/>新しい機能は自分で実装"]
+        F4["📚 学習コスト<br/><code style='color: white'>高い</code><br/><br/>Vimscript/Lua<br/>プラグイン仕様"]
+    end
+
+    subgraph Framework["📦 フレームワーク<br/>━━━━━━<br/>LazyVim等を使う"]
+        W1["⏱️ セットアップ時間<br/><code style='color: white'>数時間</code>"]
+        W2["🎯 自由度<br/><code style='color: white'>70-80%</code>"]
+        W3["💰 メンテナンスコスト<br/><code style='color: white'>低い</code><br/><br/>フレームワークが更新<br/>カスタマイズのみ管理"]
+        W4["📚 学習コスト<br/><code style='color: white'>中程度</code><br/><br/>フレームワークの思想<br/>カスタマイズ方法"]
+    end
+
+    subgraph Default["🎨 デフォルト<br/>━━━━━━<br/>そのまま使う"]
+        D1["⏱️ セットアップ時間<br/><code style='color: white'>即座</code>"]
+        D2["🎯 自由度<br/><code style='color: white'>0%</code>"]
+        D3["💰 メンテナンスコスト<br/><code style='color: white'>なし</code><br/><br/>更新は自動<br/>設定ファイル不要"]
+        D4["📚 学習コスト<br/><code style='color: white'>低い</code><br/><br/>基本操作のみ"]
+    end
+
+    Note["💡 僕の選択<br/>━━━━━━<br/><b>フレームワーク（LazyVim）</b><br/><br/>・実用まで早い<br/>・メンテナンス楽<br/>・カスタマイズも可能<br/>・仕事で使い続けられる"]
+
+    Full -.->|"以前はこれ"| Framework
+    Framework -.->|"今はこれ"| Note
+
+    style Full fill:#ffebee
+    style Framework fill:#e8f5e9
+    style Default fill:#e3f2fd
+    style Note fill:#fff3e0
+```
 
 **公式サイト:** https://www.lazyvim.org/
 
@@ -370,6 +517,51 @@ dotfilesは、単なる設定ファイルではなく、**自分がどう考え�
 2. **Vimtutor**: `vimtutor` コマンドで基本操作を学ぶ（30分）
 3. **tmuxを触る**: `tmux` で起動、`Ctrl+b %` で分割
 4. **LazyVimを試す**: 公式のインストール手順に従う
+
+##### 初心者向け学習ロードマップ
+
+```mermaid
+flowchart TB
+    Start["🎯 スタート<br/>━━━━━━<br/>開発環境を整えたい！"]
+
+    Week1["📅 Week 1<br/>━━━━━━<br/>🖥️ ターミナルに慣れる<br/><br/><code style='color: white'>cd</code> - ディレクトリ移動<br/><code style='color: white'>ls</code> - ファイル一覧<br/><code style='color: white'>cat</code> - ファイル表示<br/><code style='color: white'>grep</code> - 検索"]
+
+    Week2["📅 Week 2<br/>━━━━━━<br/>📝 Vimの基礎<br/><br/><code style='color: white'>vimtutor</code> で30分学習<br/>・<code style='color: white'>i</code> で入力、<code style='color: white'>Esc</code> で戻る<br/>・<code style='color: white'>:wq</code> で保存終了<br/>・簡単な編集を試す"]
+
+    Week3["📅 Week 3<br/>━━━━━━<br/>📦 tmuxの基礎<br/><br/><code style='color: white'>tmux</code> - 起動<br/><code style='color: white'>Ctrl+b %</code> - 縦分割<br/><code style='color: white'>Ctrl+b d</code> - 離脱<br/><code style='color: white'>tmux attach</code> - 再接続"]
+
+    Week4["📅 Week 4<br/>━━━━━━<br/>🚀 LazyVimを試す<br/><br/>公式手順でインストール<br/>・既存プロジェクトで使う<br/>・わからない操作は調べる<br/>・少しずつ慣れる"]
+
+    Practice["🎓 実践フェーズ<br/>━━━━━━<br/>実際の仕事で使う<br/><br/>・小さいタスクから<br/>・エラーを恐れない<br/>・dotfilesをGit管理"]
+
+    Master["✅ 習熟<br/>━━━━━━<br/>自分のスタイル確立<br/><br/>・必要なカスタマイズ追加<br/>・チームに共有<br/>・継続的に改善"]
+
+    Start --> Week1
+    Week1 --> Week2
+    Week2 --> Week3
+    Week3 --> Week4
+    Week4 --> Practice
+    Practice --> Master
+
+    Note1["💡 焦らない<br/>━━━━━━<br/>一度に全部<br/>覚える必要なし"]
+    Note2["💡 実践重視<br/>━━━━━━<br/>読むより<br/>触って覚える"]
+    Note3["💡 挫折OK<br/>━━━━━━<br/>戻ってきたら<br/>また続ければいい"]
+
+    Week1 -.-> Note1
+    Week3 -.-> Note2
+    Practice -.-> Note3
+
+    style Start fill:#e3f2fd
+    style Week1 fill:#fff3e0
+    style Week2 fill:#fff3e0
+    style Week3 fill:#fff3e0
+    style Week4 fill:#fff3e0
+    style Practice fill:#e8f5e9
+    style Master fill:#c8e6c9
+    style Note1 fill:#fffde7
+    style Note2 fill:#fffde7
+    style Note3 fill:#fffde7
+```
 
 いきなり全部を変える必要はありません。
 **一つずつ、必要になったら足していく**のがおすすめです。
