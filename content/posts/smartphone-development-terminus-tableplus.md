@@ -77,6 +77,36 @@ SNSを見る。ニュースを読む。ゲームをする。それはそれで�
 
 もちろん、全部を「生産的な時間」にする必要はない。休息も大事だ。でも「ちょっと確認したいな」というときに、確認できる環境があるのは便利だろうと思った。
 
+### 通勤時間の変化：Before / After
+
+```mermaid
+flowchart TB
+    subgraph Before["❌ 導入前"]
+        B1["📱 通勤時間<br/>━━━━━━<br/>・SNSを見る<br/>・ニュースを読む<br/>・ゲームをする"]
+        B2["💭 気になること<br/>━━━━━━<br/>・ログは大丈夫かな？<br/>・あの設定どうだっけ？<br/>・データ確認したいな"]
+        B3["😰 モヤモヤ<br/>━━━━━━<br/>・確認できない<br/>・出社まで待つ<br/>・忘れてしまう"]
+
+        B1 --> B2
+        B2 --> B3
+    end
+
+    subgraph After["✅ 導入後"]
+        A1["📱 通勤時間<br/>━━━━━━<br/>・選択肢が増えた<br/>・確認できる<br/>・考えられる"]
+        A2["🔍 できること<br/>━━━━━━<br/>・ログ確認<br/>・DB確認<br/>・設定確認<br/>・コード確認"]
+        A3["✨ メリット<br/>━━━━━━<br/>・モヤモヤ解消<br/>・事前に当たり付け<br/>・PC作業に集中"]
+
+        A1 --> A2
+        A2 --> A3
+    end
+
+    Before -.->|Terminus<br/>TablePlus導入| After
+
+    style Before fill:#ffebee
+    style After fill:#e8f5e9
+    style B3 fill:#ffcdd2
+    style A3 fill:#c8e6c9
+```
+
 ---
 
 ## Terminus でできること
@@ -124,6 +154,38 @@ cat config/settings.py | grep DATABASE
 幸い、Tab補完の途中で止まっていたので実害はなかった。でもそれ以来、**スマホからは本番サーバーに直接触らない**というルールを自分に課した。
 
 確認用の踏み台サーバーを経由するか、読み取り専用のアカウントを使う。スマホでの操作は「見る」に徹する。これ大事。
+
+### 安全なSSH接続構成
+
+```mermaid
+flowchart TB
+    subgraph Dangerous["❌ 危険な構成"]
+        D1["📱 スマホ<br/>(Terminus)"]
+        D2["🖥️ 本番サーバー<br/>━━━━━━<br/>・読み書き可能<br/>・全権限"]
+        D3["⚠️ リスク<br/>━━━━━━<br/>・誤操作で本番破壊<br/>・電車の揺れで誤タップ<br/>・rm -rf の危険"]
+
+        D1 -->|直接接続| D2
+        D2 --> D3
+    end
+
+    subgraph Safe["✅ 安全な構成"]
+        S1["📱 スマホ<br/>(Terminus)"]
+        S2["🛡️ 踏み台サーバー<br/>━━━━━━<br/>・読み取り専用ユーザー<br/>・限定された権限"]
+        S3["🖥️ 本番サーバー<br/>━━━━━━<br/>・踏み台経由のみ<br/>・SELECT のみ許可"]
+        S4["✅ 安全対策<br/>━━━━━━<br/>・直接接続不可<br/>・読み取り専用<br/>・誤操作防止"]
+
+        S1 -->|Step 1| S2
+        S2 -->|Step 2| S3
+        S3 --> S4
+    end
+
+    Dangerous -.->|改善| Safe
+
+    style Dangerous fill:#ffebee
+    style Safe fill:#e8f5e9
+    style D3 fill:#ffcdd2
+    style S4 fill:#c8e6c9
+```
 
 ---
 
@@ -223,6 +285,35 @@ PCを開いたときに、コピペして実行。考える時間と実行する
 
 要するに、**「入力」より「確認」**、**「作る」より「考える」**がスマホ向きだ。
 
+### スマホでやるべきか判断フロー
+
+```mermaid
+flowchart TB
+    Start["やりたい作業"] --> Q1{作業の種類は？}
+
+    Q1 -->|確認・閲覧| Q2{データ量は？}
+    Q2 -->|少ない| Good1["✅ スマホ向き<br/>━━━━━━<br/>・ログ確認<br/>・設定確認<br/>・コード確認<br/>・データ確認"]
+    Q2 -->|大量| Bad1["❌ PCで<br/>━━━━━━<br/>・大量ログ解析<br/>・複数ファイル比較<br/>・画面が小さすぎる"]
+
+    Q1 -->|思考・設計| Good2["✅ スマホ向き<br/>━━━━━━<br/>・クエリを考える<br/>・設計を考える<br/>・方針を決める<br/>・メモに下書き"]
+
+    Q1 -->|入力・編集| Q3{入力量は？}
+    Q3 -->|1〜2行| Maybe["△ 可能だが注意<br/>━━━━━━<br/>・フラグ変更<br/>・コメントアウト<br/>・誤操作に注意"]
+    Q3 -->|多い| Bad2["❌ PCで<br/>━━━━━━<br/>・コーディング<br/>・リファクタリング<br/>・入力が非効率"]
+
+    Q1 -->|実行・操作| Q4{複雑さは？}
+    Q4 -->|シンプル| Maybe2["△ 可能だが注意<br/>━━━━━━<br/>・単発コマンド<br/>・安全確認必須"]
+    Q4 -->|複雑| Bad3["❌ PCで<br/>━━━━━━<br/>・デバッグ<br/>・ビルド<br/>・テスト実行"]
+
+    style Good1 fill:#e8f5e9
+    style Good2 fill:#e8f5e9
+    style Maybe fill:#fff3e0
+    style Maybe2 fill:#fff3e0
+    style Bad1 fill:#ffebee
+    style Bad2 fill:#ffebee
+    style Bad3 fill:#ffebee
+```
+
 ---
 
 ## 環境構築のポイント
@@ -253,6 +344,53 @@ Terminusも TablePlusも、接続情報を保存できる。便利だが、ス�
 
 「通勤時間を全部開発に使う」ではなく、「使えるときに使える環境を用意しておく」くらいのスタンスで。
 
+### セキュリティ設定のチェックリスト
+
+```mermaid
+flowchart TB
+    Start["🔧 環境構築開始"] --> Step1["1️⃣ サーバー側設定"]
+
+    Step1 --> S1{"踏み台サーバー<br/>用意した？"}
+    S1 -->|No| S1A["⚠️ 本番直接接続は危険<br/>━━━━━━<br/>・開発用サーバー準備<br/>・踏み台サーバー設置"]
+    S1A --> S2
+    S1 -->|Yes| S2
+
+    S2{"読み取り専用<br/>ユーザー作成した？"}
+    S2 -->|No| S2A["⚠️ 全権限は危険<br/>━━━━━━<br/><code style='color: white'>GRANT SELECT ON *.* TO 'readonly'@'%';</code><br/>・UPDATE/DELETE禁止<br/>・SELECT のみ許可"]
+    S2A --> Step2
+    S2 -->|Yes| Step2
+
+    Step2["2️⃣ 端末側設定"] --> S3{"端末ロック<br/>設定済み？"}
+    S3 -->|No| S3A["⚠️ 紛失時のリスク<br/>━━━━━━<br/>・PIN/パスワード設定<br/>・生体認証有効化"]
+    S3A --> S4
+    S3 -->|Yes| S4
+
+    S4{"アプリに<br/>パスワード保護？"}
+    S4 -->|No| S4A["⚠️ 他人が見れる<br/>━━━━━━<br/>・Terminus: パスコード設定<br/>・TablePlus: 接続時パスワード"]
+    S4A --> S5
+    S4 -->|Yes| S5
+
+    S5{"秘密鍵は<br/>安全に管理？"}
+    S5 -->|No| S5A["⚠️ 鍵漏洩のリスク<br/>━━━━━━<br/>・パスフレーズ付き鍵<br/>・定期的な鍵ローテーション"]
+    S5A --> Step3
+    S5 -->|Yes| Step3
+
+    Step3["3️⃣ 運用ルール"] --> S6{"本番操作は<br/>禁止した？"}
+    S6 -->|No| S6A["⚠️ 誤操作で本番破壊<br/>━━━━━━<br/>・スマホは「見る」だけ<br/>・更新はPC から"]
+    S6A --> Done
+    S6 -->|Yes| Done
+
+    Done["✅ 設定完了<br/>━━━━━━<br/>安全にスマホ開発できます"]
+
+    style S1A fill:#fff3e0
+    style S2A fill:#fff3e0
+    style S3A fill:#fff3e0
+    style S4A fill:#fff3e0
+    style S5A fill:#fff3e0
+    style S6A fill:#fff3e0
+    style Done fill:#e8f5e9
+```
+
 ---
 
 ## まとめ：通勤時間を「開発の一部」にする
@@ -268,6 +406,46 @@ Terminusも TablePlusも、接続情報を保存できる。便利だが、ス�
 - 方針を決める
 
 これらは「開発の一部」だ。そしてスマホでもできる。
+
+### 開発作業の分解：PC vs スマホ
+
+```mermaid
+flowchart LR
+    subgraph Dev["開発作業全体"]
+        direction TB
+        Think["🤔 考える<br/>━━━━━━<br/>・設計を考える<br/>・方針を決める<br/>・クエリを考える<br/>・アーキテクチャ検討"]
+        Confirm["🔍 確認する<br/>━━━━━━<br/>・ログ確認<br/>・データ確認<br/>・設定確認<br/>・コード確認"]
+        Input["⌨️ 入力する<br/>━━━━━━<br/>・コーディング<br/>・リファクタリング<br/>・テスト作成<br/>・ドキュメント作成"]
+        Execute["▶️ 実行する<br/>━━━━━━<br/>・ビルド<br/>・テスト実行<br/>・デバッグ<br/>・デプロイ"]
+    end
+
+    subgraph Mobile["📱 スマホで可能"]
+        M1["✅ 思考作業"]
+        M2["✅ 確認作業"]
+    end
+
+    subgraph PC["💻 PCが必要"]
+        P1["⌨️ 入力作業"]
+        P2["▶️ 実行作業"]
+    end
+
+    Think --> M1
+    Confirm --> M2
+    Input --> P1
+    Execute --> P2
+
+    M1 -.->|通勤時間に| Result1["事前に考えておく<br/>→ PCでは手を動かすだけ"]
+    M2 -.->|通勤時間に| Result2["当たりを付けておく<br/>→ PC作業が効率化"]
+
+    style Think fill:#e8f5e9
+    style Confirm fill:#e8f5e9
+    style Input fill:#e3f2fd
+    style Execute fill:#e3f2fd
+    style Mobile fill:#c8e6c9
+    style PC fill:#bbdefb
+    style Result1 fill:#fff3e0
+    style Result2 fill:#fff3e0
+```
 
 TerminusとTablePlusを入れて、通勤時間が変わった。正確に言えば、**通勤時間の「使い道」が増えた**。
 
