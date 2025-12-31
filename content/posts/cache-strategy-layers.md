@@ -232,11 +232,36 @@ curl -X POST "https://api.fastly.com/service/{id}/purge/product-123"
 
 **リバースプロキシ** は、アプリケーションサーバーの前段に配置され、レスポンスをキャッシュします。
 
+#### 構成図
+
+```mermaid
+graph LR
+    User[ユーザー]
+    Proxy[Nginx/Varnish<br/>リバースプロキシ]
+    Cache[(プロキシ<br/>キャッシュ)]
+    App[アプリサーバー<br/>Node.js/Python/Ruby]
+    DB[(データベース<br/>PostgreSQL/MySQL)]
+
+    User -->|リクエスト| Proxy
+    Proxy -->|1. キャッシュ確認| Cache
+    Cache -->|ヒット| Proxy
+    Cache -.->|ミス| App
+    Proxy -.->|2. バックエンドへ| App
+    App -.->|3. DB問い合わせ| DB
+    DB -.->|4. データ| App
+    App -.->|5. レスポンス| Proxy
+    Proxy -->|6. キャッシュ保存| Cache
+    Proxy -->|レスポンス| User
+
+    style Proxy fill:#4caf50,stroke:#2e7d32,color:#fff
+    style Cache fill:#ffeb3b,stroke:#f57f17
+    style App fill:#2196f3,stroke:#1565c0,color:#fff
+    style DB fill:#9c27b0,stroke:#6a1b9a,color:#fff
+    style User fill:#e0e0e0,stroke:#616161
 ```
-ユーザー → Nginx/Varnish → アプリサーバー → DB
-              ↓
-         ここでキャッシュ
-```
+
+**キャッシュヒット時**: ユーザー → プロキシ → キャッシュ → ユーザー（超高速）
+**キャッシュミス時**: ユーザー → プロキシ → アプリ → DB → アプリ → プロキシ → キャッシュ保存 → ユーザー
 
 ### Nginxのプロキシキャッシュ
 
@@ -523,25 +548,62 @@ MySQL 8.0でクエリキャッシュが廃止された理由：
 
 ### CPUキャッシュ（L1/L2/L3）
 
+```mermaid
+graph TB
+    subgraph CPU["CPU（マルチコアプロセッサ）"]
+        subgraph Core0["Core 0"]
+            L1_0["L1 Cache<br/>32KB<br/>~1ns"]
+            L2_0["L2 Cache<br/>256KB<br/>~4ns"]
+            L1_0 --> L2_0
+        end
+
+        subgraph Core1["Core 1"]
+            L1_1["L1 Cache<br/>32KB<br/>~1ns"]
+            L2_1["L2 Cache<br/>256KB<br/>~4ns"]
+            L1_1 --> L2_1
+        end
+
+        subgraph Core2["Core 2"]
+            L1_2["L1 Cache<br/>32KB<br/>~1ns"]
+            L2_2["L2 Cache<br/>256KB<br/>~4ns"]
+            L1_2 --> L2_2
+        end
+
+        L3["L3 Cache（共有）<br/>8MB<br/>~12ns"]
+
+        L2_0 --> L3
+        L2_1 --> L3
+        L2_2 --> L3
+    end
+
+    Memory["メインメモリ<br/>32GB<br/>~100ns"]
+    SSD["SSD<br/>1TB<br/>~100μs"]
+    HDD["HDD<br/>4TB<br/>~10ms"]
+
+    L3 --> Memory
+    Memory --> SSD
+    SSD --> HDD
+
+    style CPU fill:#e3f2fd,stroke:#1976d2
+    style Core0 fill:#fff3e0,stroke:#f57c00
+    style Core1 fill:#fff3e0,stroke:#f57c00
+    style Core2 fill:#fff3e0,stroke:#f57c00
+    style L1_0 fill:#c8e6c9,stroke:#388e3c
+    style L1_1 fill:#c8e6c9,stroke:#388e3c
+    style L1_2 fill:#c8e6c9,stroke:#388e3c
+    style L2_0 fill:#b2dfdb,stroke:#00796b
+    style L2_1 fill:#b2dfdb,stroke:#00796b
+    style L2_2 fill:#b2dfdb,stroke:#00796b
+    style L3 fill:#b2ebf2,stroke:#0097a7
+    style Memory fill:#e1bee7,stroke:#7b1fa2
+    style SSD fill:#f8bbd0,stroke:#c2185b
+    style HDD fill:#ffccbc,stroke:#d84315
 ```
-┌─────────────────────────────────────────────────────────┐
-│                        CPU                              │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐     │
-│  │   Core 0    │  │   Core 1    │  │   Core 2    │     │
-│  │ ┌─────────┐ │  │ ┌─────────┐ │  │ ┌─────────┐ │     │
-│  │ │ L1 32KB │ │  │ │ L1 32KB │ │  │ │ L1 32KB │ │     │
-│  │ │ L2 256KB│ │  │ │ L2 256KB│ │  │ │ L2 256KB│ │     │
-│  │ └─────────┘ │  │ └─────────┘ │  │ └─────────┘ │     │
-│  └─────────────┘  └─────────────┘  └─────────────┘     │
-│  ┌─────────────────────────────────────────────────┐   │
-│  │              L3 Cache（共有）8MB                 │   │
-│  └─────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────┘
-                            ↓
-┌─────────────────────────────────────────────────────────┐
-│                    メインメモリ 32GB                     │
-└─────────────────────────────────────────────────────────┘
-```
+
+**階層構造の特徴：**
+- **L1/L2キャッシュ**: コアごとに専有（高速だが小容量）
+- **L3キャッシュ**: 全コアで共有（L1/L2より大容量）
+- **速度差**: L1とHDDで**1000万倍**の差
 
 | レベル | サイズ | レイテンシ |
 |--------|--------|-----------|
