@@ -3,12 +3,12 @@
    ========================================================================== */
 
 .contact-form {
-  max-width: 600px;
-  margin: 2rem auto;
-  padding: 2rem;
-  background: var(--entry);
-  border-radius: 8px;
-  border: 1px solid var(--border);
+  max-width: 100%;
+  margin: 2rem 0;
+  padding: 0;
+  background: transparent;
+  border-radius: 0;
+  border: none;
 }
 
 /* フォームグループ */
@@ -115,8 +115,8 @@
    ========================================================================== */
 
 [data-theme="dark"] .contact-form {
-  background: var(--entry);
-  border-color: var(--border);
+  background: transparent;
+  border: none;
 }
 
 [data-theme="dark"] .contact-form input[type="text"],
