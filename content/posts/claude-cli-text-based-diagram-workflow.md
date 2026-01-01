@@ -136,6 +136,8 @@ Claude CLIは**画像を直接生成するわけではありません**。生成
 
 **百聞は一見にしかず**。同じ「認証フロー」を4つのツールで描いてみましょう。
 
+> **Note**: PlantUML/D2/Graphvizの図は[Kroki](https://kroki.io/)サービスを使って画像化しています。Krokiは複数の図解ツールに対応した統一APIを提供しており、URLにエンコードしたコードを埋め込むだけで動的に画像を生成できます。
+
 ---
 
 #### 題材：ログイン認証フロー
@@ -175,9 +177,14 @@ sequenceDiagram
 
 #### PlantUML版
 
+![PlantUML シーケンス図](https://kroki.io/plantuml/svg/eNpVkEFrwzAMhe_6FSL30nsOo4YssDFYoUl3Vh11MUvtIMst-_ez3Vx2E_r09J50iEqi6baAOl0YP8K382iSzuzVWVIXPPZLeACQ1SA4RhakiCOsWeisW8krNr0Er-ynprD-PzPHNzyx3FkqNTCR0oUiY9NtVQVd9kgafLpdWABG3L1g3-JrXiy41GDOXwP0BZgWj5-nAfdZMu8rBVNA12YzEjtjylGhw91zugaverPpzyzu-osrxfgIMpX-0_H9a8Ah_LAvVrk1tttfYrKWYwQ45FPL0_4A3LBk3g==)
+
+<details>
+<summary>ソースコード（クリックで展開）</summary>
+
 ```text
 @startuml
-title ログイン認証フロー
+title Login Authentication Flow
 
 actor User as U
 participant "Frontend" as F
@@ -186,16 +193,18 @@ database "Database" as D
 
 autonumber
 
-U -> F: ログイン情報入力
+U -> F: Enter login info
 F -> A: POST /auth/login
-A -> D: ユーザー検索
-D --> A: ユーザー情報
-A -> A: パスワード検証
+A -> D: Search user
+D --> A: User info
+A -> A: Verify password
 A --> F: JWT Token
-F --> U: ログイン成功
+F --> U: Login success
 
 @enduml
 ```
+
+</details>
 
 **特徴**: `@startuml`〜`@enduml`で囲む。actor/database等のステレオタイプが豊富。
 
@@ -203,10 +212,13 @@ F --> U: ログイン成功
 
 #### D2版
 
+![D2 フロー図](https://kroki.io/d2/svg/eNpVkN1KxDAQhe_nKc4LmMV_yIUgLIIiuLBVr2My3QaXpExSZZF9d5u22-pNGDhnzncmzgvb7GPQEL9rMlGXWDRe-xc_BKTGtKzRsqQY6EhUSwyZg9N4mCYi03qN-80jtixfLETOZPNhUr-4nqa_Yfaw98H1vuOIw9kdlthzhee48wE-1HHGFc-AuVDYvGwrrEyXm9W-OAu_6Av1UvVVjNgGJX-uM4dcqfHCATFtD8K1whuLrw9oTUrfUdxJXgreKDy9V6jiJ4d__cavuz31T521nBL9AjVec3c=)
+
+<details>
+<summary>ソースコード（クリックで展開）</summary>
+
 ```text
-title: ログイン認証フロー {
-  near: top-center
-}
+direction: right
 
 user: User {
   shape: person
@@ -220,20 +232,27 @@ database: Database {
   shape: cylinder
 }
 
-user -> frontend: 1. ログイン情報入力
+user -> frontend: 1. Login info
 frontend -> api: 2. POST /auth/login
-api -> database: 3. ユーザー検索
-database -> api: 4. ユーザー情報
-api -> api: 5. パスワード検証
+api -> database: 3. Search user
+database -> api: 4. User info
+api -> api: 5. Verify password
 api -> frontend: 6. JWT Token
-frontend -> user: 7. ログイン成功
+frontend -> user: 7. Login success
 ```
+
+</details>
 
 **特徴**: `shape`でアイコン指定。モダンで美しいデフォルトスタイル。
 
 ---
 
 #### Graphviz (DOT)版
+
+![Graphviz フロー図](https://kroki.io/graphviz/svg/eNptkd9rwjAQx9_9Kw6fXWW_H6QDYQgbwmR224P4kDbXJngk5dKuK2P_-6K2Wq19SZO7D99PLlJnLHIF07JQM7IV_A7AfyzMRmoO5--T3d5YibBySuQYxvZnBK6oCcNUE6EcwXZNLFkOSWeqiKnE9WSwIz8ccksikc4d9vprX7DVeh81Y2sKNBJWJGKkcNgeDJuG6eLlUNv-L5G_kdvqsyhELNzBNqlJG4ncC80Y0ZxYXj31w68DmNtMG9AmtcNzRU90bW4CWLwtIxgLP80xbbmutO8-2jXIbeD9BScKSnfhEmcBd8HedCfTPoIUTqE8zelC9wF8Iuu0hlw4V1mWZ1K9Sz8E8PoVQWQ3aC7HdCewf-EGfWzn5cokQef6-N_gH29lxno=)
+
+<details>
+<summary>ソースコード（クリックで展開）</summary>
 
 ```text
 digraph AuthFlow {
@@ -245,15 +264,17 @@ digraph AuthFlow {
     API [label="API Server"];
     Database [shape=cylinder, fillcolor=lightgreen];
 
-    User -> Frontend [label="1. ログイン情報"];
+    User -> Frontend [label="1. Login info"];
     Frontend -> API [label="2. POST /auth/login"];
-    API -> Database [label="3. ユーザー検索"];
-    Database -> API [label="4. ユーザー情報", style=dashed];
-    API -> API [label="5. パスワード検証"];
+    API -> Database [label="3. Search user"];
+    Database -> API [label="4. User info", style=dashed];
+    API -> API [label="5. Verify password"];
     API -> Frontend [label="6. JWT Token", style=dashed];
-    Frontend -> User [label="7. ログイン成功", style=dashed];
+    Frontend -> User [label="7. Login success", style=dashed];
 }
 ```
+
+</details>
 
 **特徴**: `rankdir`でレイアウト方向指定。細かいスタイル制御が可能。
 
@@ -322,9 +343,14 @@ graph LR
 
 #### PlantUML版
 
+![PlantUML アーキテクチャ図](https://kroki.io/plantuml/svg/eNpdkDELwkAMhff8itC9k7v06C2Cg6DSQRzSa7DFWksuFUT87_aOiq1ZXki-Fx7JvJLocGtBG20ZV-mhYUEjrm6UnQ7CAD25K10Yk7xtuNMEX4BjkdO74NGzwHsGFVzilp4sX-4UJnuWB8sZyWOxwE3f_-Fmt5njJk4rUirJhxDkak7CJl8csiOxvPTz2KmLNhtsITam6XpMU0Q1YKLmk1qAjLsqvOYDNhZVvQ==)
+
+<details>
+<summary>ソースコード（クリックで展開）</summary>
+
 ```text
 @startuml
-title 3層アーキテクチャ
+title 3-Tier Architecture
 
 package "Client" {
     actor User
@@ -351,11 +377,18 @@ A --> D
 @enduml
 ```
 
+</details>
+
 **特徴**: `package`でグループ化。コンポーネント図として正式なUML。
 
 ---
 
 #### D2版
+
+![D2 アーキテクチャ図](https://kroki.io/d2/svg/eNqNkM8KwjAMxu95iryAfYAeBJkXwYMg4rn_cAXpSluVIXt3k25ThxdzSMKvX9MvtT45U3wXJCZ_aQuAuXoXisSmVnwCUtyySxJPlCfAkVsVncToUu5CpQMMAA-nJZ6dxr3q33q6eecRzI-1Z6mKUeImxoVURU_wsJt1zIwyLT3VcPl1YPqrD3aSVg9WFSVxS3kx2uoRapX_GjP-heDtcbVG2kyMi8Cn5QPaQ5BtmOqMqutvyLaE1fACWHRvww==)
+
+<details>
+<summary>ソースコード（クリックで展開）</summary>
 
 ```text
 direction: right
@@ -389,11 +422,18 @@ app.api -> app.cache
 app.api -> data.db
 ```
 
+</details>
+
 **特徴**: ネストした構造が自然に書ける。`direction`でレイアウト指定。
 
 ---
 
 #### Graphviz (DOT)版
+
+![Graphviz アーキテクチャ図](https://kroki.io/graphviz/svg/eNqdks9KxDAQh-99itL7PkGJUNaLsAdRxIMskiZjG3ZMwyR1KbLvbv7YjWyV4s4t349MvkwiVUfc9GVDolcOhBsJys-i9EVcH6Qitnuo41oM72YYtWSORqiLyOzYpv0CR-uAXgUq0O67QyjkLSCrtpFX9ZlbNyGwN4UIMtOwFgMOxFB1vZsAcTjm-MkClS-25waYj5SxsE_p6Q-fI7RLmWcPd3wC-q9Pi-Hmc-jbPAJ9BKUfjROqVry4MUuvxsOrvDoC0Dlt7u8uxDy5EAu15aKHeZ5iQqUl0Iq45I4vzW8DvUrdKH3IYejTcrsiFb_B5iY_QErze_jsPIOU5ZH4LN77Fz6fXhen4gsWkeph)
+
+<details>
+<summary>ソースコード（クリックで展開）</summary>
 
 ```text
 digraph Architecture {
@@ -435,6 +475,8 @@ digraph Architecture {
     APIServer -> Database;
 }
 ```
+
+</details>
 
 **特徴**: `cluster_`プレフィックスで囲み。スタイル制御が最も細かい。
 
