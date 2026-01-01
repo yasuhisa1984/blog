@@ -28,6 +28,8 @@ graph LR
 
 1. [Claude CLIだけで図解する、という考え方](#1-claude-cliだけで図解するという考え方)
 2. [テキストベース図解ツールの全体マップ](#2-テキストベース図解ツールの全体マップ)
+   - [🎯 同じ題材で4ツール比較：シーケンス図](#-同じ題材で4ツール比較一目で分かる違い)
+   - [🏗️ 同じ題材で4ツール比較：アーキテクチャ図](#️-同じ題材で4ツール比較アーキテクチャ図)
 3. [環境構築クイックスタート](#3-環境構築クイックスタート)
 4. [Mermaid：Markdown & Hugo向けの定番](#4-mermaidmarkdown--hugo向けの定番)
 5. [PlantUML：本格UMLと長期保守に強い選択肢](#5-plantuml本格umlと長期保守に強い選択肢)
@@ -129,6 +131,326 @@ Claude CLIは**画像を直接生成するわけではありません**。生成
 ### 4つのツールの概要
 
 まずはコード例を出さずに、各ツールの**立ち位置と用途**を整理します。
+
+### 🎯 同じ題材で4ツール比較：一目で分かる違い
+
+**百聞は一見にしかず**。同じ「認証フロー」を4つのツールで描いてみましょう。
+
+---
+
+#### 題材：ログイン認証フロー
+
+```
+ユーザー → フロントエンド → APIサーバー → データベース
+1. ログインリクエスト
+2. 認証処理
+3. トークン発行
+4. レスポンス
+```
+
+---
+
+#### Mermaid版
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant U as User
+    participant F as Frontend
+    participant A as API Server
+    participant D as Database
+
+    U->>F: ログイン情報入力
+    F->>A: POST /auth/login
+    A->>D: ユーザー検索
+    D-->>A: ユーザー情報
+    A->>A: パスワード検証
+    A-->>F: JWT Token
+    F-->>U: ログイン成功
+```
+
+**特徴**: Markdown内で直接レンダリング。最も簡潔な記法。
+
+---
+
+#### PlantUML版
+
+```text
+@startuml
+title ログイン認証フロー
+
+actor User as U
+participant "Frontend" as F
+participant "API Server" as A
+database "Database" as D
+
+autonumber
+
+U -> F: ログイン情報入力
+F -> A: POST /auth/login
+A -> D: ユーザー検索
+D --> A: ユーザー情報
+A -> A: パスワード検証
+A --> F: JWT Token
+F --> U: ログイン成功
+
+@enduml
+```
+
+**特徴**: `@startuml`〜`@enduml`で囲む。actor/database等のステレオタイプが豊富。
+
+---
+
+#### D2版
+
+```text
+title: ログイン認証フロー {
+  near: top-center
+}
+
+user: User {
+  shape: person
+}
+
+frontend: Frontend
+
+api: API Server
+
+database: Database {
+  shape: cylinder
+}
+
+user -> frontend: 1. ログイン情報入力
+frontend -> api: 2. POST /auth/login
+api -> database: 3. ユーザー検索
+database -> api: 4. ユーザー情報
+api -> api: 5. パスワード検証
+api -> frontend: 6. JWT Token
+frontend -> user: 7. ログイン成功
+```
+
+**特徴**: `shape`でアイコン指定。モダンで美しいデフォルトスタイル。
+
+---
+
+#### Graphviz (DOT)版
+
+```text
+digraph AuthFlow {
+    rankdir=LR;
+    node [shape=box, style=filled, fillcolor=lightblue];
+
+    User [shape=ellipse, fillcolor=lightyellow];
+    Frontend [label="Frontend"];
+    API [label="API Server"];
+    Database [shape=cylinder, fillcolor=lightgreen];
+
+    User -> Frontend [label="1. ログイン情報"];
+    Frontend -> API [label="2. POST /auth/login"];
+    API -> Database [label="3. ユーザー検索"];
+    Database -> API [label="4. ユーザー情報", style=dashed];
+    API -> API [label="5. パスワード検証"];
+    API -> Frontend [label="6. JWT Token", style=dashed];
+    Frontend -> User [label="7. ログイン成功", style=dashed];
+}
+```
+
+**特徴**: `rankdir`でレイアウト方向指定。細かいスタイル制御が可能。
+
+---
+
+### 📊 4ツール比較まとめ（この題材から分かること）
+
+| 観点 | Mermaid | PlantUML | D2 | Graphviz |
+|------|---------|----------|-----|----------|
+| **記法の簡潔さ** | ◎ 最も短い | ○ やや冗長 | ○ 読みやすい | △ 冗長 |
+| **シーケンス図の表現力** | ◎ | ◎ | △ | ✕ 不向き |
+| **そのままブログに貼れる** | ◎ | ✕ 要変換 | ✕ 要変換 | ✕ 要変換 |
+| **見た目の美しさ** | ○ | ○ | ◎ | △ |
+| **カスタマイズ性** | △ | ◎ | ○ | ◎ |
+
+> **結論**: シーケンス図なら **Mermaid** か **PlantUML** がベスト。D2/Graphvizはシーケンス図より構成図向き。
+
+---
+
+### 🏗️ 同じ題材で4ツール比較：アーキテクチャ図
+
+次に、**3層アーキテクチャ**を4ツールで描き比べます。
+
+---
+
+#### 題材：Webアプリの3層アーキテクチャ
+
+```
+[ユーザー] → [Webサーバー] → [APIサーバー] → [データベース]
+              ↓
+           [キャッシュ]
+```
+
+---
+
+#### Mermaid版
+
+```mermaid
+graph LR
+    subgraph Client
+        U[User]
+    end
+
+    subgraph Web Layer
+        W[Web Server]
+    end
+
+    subgraph App Layer
+        A[API Server]
+        C[(Cache)]
+    end
+
+    subgraph Data Layer
+        D[(Database)]
+    end
+
+    U --> W
+    W --> A
+    A --> C
+    A --> D
+```
+
+**特徴**: `subgraph`でグループ化。`[( )]`でシリンダー形状。
+
+---
+
+#### PlantUML版
+
+```text
+@startuml
+title 3層アーキテクチャ
+
+package "Client" {
+    actor User
+}
+
+package "Web Layer" {
+    [Web Server] as W
+}
+
+package "App Layer" {
+    [API Server] as A
+    database "Cache" as C
+}
+
+package "Data Layer" {
+    database "Database" as D
+}
+
+User --> W
+W --> A
+A --> C
+A --> D
+
+@enduml
+```
+
+**特徴**: `package`でグループ化。コンポーネント図として正式なUML。
+
+---
+
+#### D2版
+
+```text
+direction: right
+
+client: Client {
+    user: User {
+        shape: person
+    }
+}
+
+web: Web Layer {
+    server: Web Server
+}
+
+app: App Layer {
+    api: API Server
+    cache: Cache {
+        shape: cylinder
+    }
+}
+
+data: Data Layer {
+    db: Database {
+        shape: cylinder
+    }
+}
+
+client.user -> web.server
+web.server -> app.api
+app.api -> app.cache
+app.api -> data.db
+```
+
+**特徴**: ネストした構造が自然に書ける。`direction`でレイアウト指定。
+
+---
+
+#### Graphviz (DOT)版
+
+```text
+digraph Architecture {
+    rankdir=LR;
+    compound=true;
+
+    subgraph cluster_client {
+        label="Client";
+        style=filled;
+        fillcolor=lightyellow;
+        User [shape=ellipse];
+    }
+
+    subgraph cluster_web {
+        label="Web Layer";
+        style=filled;
+        fillcolor=lightblue;
+        WebServer [label="Web Server"];
+    }
+
+    subgraph cluster_app {
+        label="App Layer";
+        style=filled;
+        fillcolor=lightgreen;
+        APIServer [label="API Server"];
+        Cache [shape=cylinder];
+    }
+
+    subgraph cluster_data {
+        label="Data Layer";
+        style=filled;
+        fillcolor=lightpink;
+        Database [shape=cylinder];
+    }
+
+    User -> WebServer;
+    WebServer -> APIServer;
+    APIServer -> Cache;
+    APIServer -> Database;
+}
+```
+
+**特徴**: `cluster_`プレフィックスで囲み。スタイル制御が最も細かい。
+
+---
+
+### 📊 4ツール比較まとめ（アーキテクチャ図）
+
+| 観点 | Mermaid | PlantUML | D2 | Graphviz |
+|------|---------|----------|-----|----------|
+| **記法の簡潔さ** | ○ | ○ | ◎ 最も直感的 | △ |
+| **アーキ図の表現力** | ○ | ○ | ◎ | ◎ |
+| **そのままブログに貼れる** | ◎ | ✕ | ✕ | ✕ |
+| **見た目の美しさ** | ○ | ○ | ◎ モダン | △ クラシック |
+| **ネスト構造** | △ 1階層のみ | ○ | ◎ 深いネスト可 | ○ |
+
+> **結論**: アーキテクチャ図なら **D2** が最も表現力が高い。ブログ埋め込み前提なら **Mermaid**。
 
 ```mermaid
 graph TB
