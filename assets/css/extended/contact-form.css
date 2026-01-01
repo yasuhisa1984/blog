@@ -1,0 +1,161 @@
+/* ==========================================================================
+   コンタクトフォーム スタイル
+   ========================================================================== */
+
+.contact-form {
+  max-width: 600px;
+  margin: 2rem auto;
+  padding: 2rem;
+  background: var(--entry);
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+
+/* フォームグループ */
+.contact-form .form-group {
+  margin-bottom: 1.5rem;
+}
+
+.contact-form .form-group:last-of-type {
+  margin-bottom: 2rem;
+}
+
+/* ラベル */
+.contact-form label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+  color: var(--content);
+  font-size: 0.9rem;
+}
+
+.contact-form .required {
+  color: #e53e3e;
+  margin-left: 2px;
+}
+
+/* 入力フィールド共通スタイル */
+.contact-form input[type="text"],
+.contact-form input[type="email"],
+.contact-form select,
+.contact-form textarea {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  font-size: 1rem;
+  line-height: 1.5;
+  color: var(--content);
+  background-color: var(--theme);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  font-family: inherit;
+  box-sizing: border-box;
+}
+
+.contact-form input[type="text"]:focus,
+.contact-form input[type="email"]:focus,
+.contact-form select:focus,
+.contact-form textarea:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+}
+
+.contact-form input::placeholder,
+.contact-form textarea::placeholder {
+  color: var(--secondary);
+  opacity: 0.7;
+}
+
+/* セレクトボックス */
+.contact-form select {
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23666' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 1rem center;
+  padding-right: 2.5rem;
+}
+
+/* テキストエリア */
+.contact-form textarea {
+  resize: vertical;
+  min-height: 150px;
+}
+
+/* 送信ボタン */
+.contact-form .submit-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 0.875rem 2rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #fff;
+  background: var(--primary);
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.1s ease;
+}
+
+.contact-form .submit-btn:hover {
+  background: var(--primary);
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
+.contact-form .submit-btn:active {
+  transform: translateY(0);
+}
+
+/* ==========================================================================
+   ダークモード対応
+   ========================================================================== */
+
+[data-theme="dark"] .contact-form {
+  background: var(--entry);
+  border-color: var(--border);
+}
+
+[data-theme="dark"] .contact-form input[type="text"],
+[data-theme="dark"] .contact-form input[type="email"],
+[data-theme="dark"] .contact-form select,
+[data-theme="dark"] .contact-form textarea {
+  background-color: var(--code-bg);
+  border-color: var(--border);
+  color: var(--content);
+}
+
+[data-theme="dark"] .contact-form select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23999' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+}
+
+[data-theme="dark"] .contact-form input::placeholder,
+[data-theme="dark"] .contact-form textarea::placeholder {
+  color: var(--secondary);
+}
+
+/* ==========================================================================
+   レスポンシブ対応
+   ========================================================================== */
+
+@media screen and (max-width: 768px) {
+  .contact-form {
+    padding: 1.5rem;
+    margin: 1.5rem 0;
+  }
+
+  .contact-form input[type="text"],
+  .contact-form input[type="email"],
+  .contact-form select,
+  .contact-form textarea {
+    padding: 0.625rem 0.875rem;
+    font-size: 16px; /* iOS でズームを防ぐ */
+  }
+
+  .contact-form .submit-btn {
+    padding: 0.75rem 1.5rem;
+  }
+}
