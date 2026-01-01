@@ -366,24 +366,39 @@ LOG_LEVEL=DEBUG
 
 ### 3.1 なぜ構造化ログなのか
 
+#### 非構造化ログ vs 構造化ログ
+
 ```mermaid
-graph LR
-    subgraph "非構造化ログ"
-        A1["2025-01-15 10:00:00 ERROR Payment failed for user usr_789 amount 5000"]
+graph TD
+    subgraph Text["非構造化ログ（テキスト）"]
+        A1[ERROR Payment failed...]
+        A2[正規表現でパース必要]
+        A3[検索・分析が困難]
     end
 
-    subgraph "構造化ログ（JSON）"
-        B1["{timestamp, level, message, user_id, amount}"]
+    subgraph JSON["構造化ログ（JSON）"]
+        B1[timestamp, level, user_id...]
+        B2[JSONパースで即解析]
+        B3[検索・フィルタ容易]
     end
 
-    A1 -->|正規表現で<br/>パース必要| Parse1[解析困難]
-    B1 -->|JSONパース| Parse2[即座に検索可能]
+    A1 --> A2 --> A3
+    B1 --> B2 --> B3
 
-    Parse1 --> Search1["grep 'usr_789' | awk '{print $8}'"]
-    Parse2 --> Search2["jq '.user_id == \"usr_789\"'"]
+    style A3 fill:#ff6b6b,stroke:#333,color:#fff
+    style B3 fill:#4caf50,stroke:#333,color:#fff
+```
 
-    style Parse1 fill:#ff6b6b,stroke:#333,color:#fff
-    style Parse2 fill:#4caf50,stroke:#333,color:#fff
+**非構造化ログの問題**:
+```
+2025-01-15 10:00:00 ERROR Payment failed for user usr_789 amount 5000
+→ grep 'usr_789' | awk '{print $8}'  # 正規表現が必要
+```
+
+**構造化ログの利点**:
+```json
+{"timestamp":"2025-01-15T10:00:00Z","level":"ERROR","user_id":"usr_789","amount":5000}
+→ jq '.user_id == "usr_789"'  # 即座に検索可能
 ```
 
 ### 3.2 構造化ログのスキーマ設計
