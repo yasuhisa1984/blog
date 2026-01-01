@@ -439,3 +439,11 @@ Amazonの規約変更、競合の増加、為替の変動。
 業務が回っていればいい。
 
 画面の美しさは、その後の話だ。
+
+---
+
+## 関連記事
+
+- [入力を減らすことが、管理部を救う](/posts/reduce-input-save-admin/) — UIで入力を減らす設計思想
+- [エンジニアのエゴより、ビジネス合理性を優先したい](/posts/business-rationality-over-ego/) — 「作らない」判断の背景
+- [なぜ「キュー（Queue）」を入れると、人間の仕事が減るのか](/posts/queue-reduces-human-work/) — UIなしで業務を回す技術的アプローチ

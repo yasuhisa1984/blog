@@ -485,3 +485,11 @@ Producer/Consumer 分離を導入するかどうかは、「その処理が失�
 ## 見るべきポイント
 
 設計レビューでは、まず「Consumer が失敗したとき、何が起きるか」を確認する。ここが曖昧だと、本番障害時に必ず混乱が起きる。次に「同じメッセージが2回来たらどうなるか」を聞く。冪等性の考慮が抜けている設計は、リトライ時に二重処理のリスクを抱えることになる。
+
+---
+
+## 関連記事
+
+- [なぜ「キュー（Queue）」を入れると、人間の仕事が減るのか](/posts/queue-reduces-human-work/) — キュー導入の動機と効果を解説
+- [メッセージキュー実践ガイド](/posts/message-queue-practical-guide/) — Producer/Consumerパターンの具体的な実装技術
+- [リトライ・サーキットブレーカー・タイムアウトパターン](/posts/retry-circuit-breaker-timeout-patterns/) — Consumerの失敗時のリトライ戦略

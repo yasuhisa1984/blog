@@ -1730,3 +1730,11 @@ logging.basicConfig(level=getattr(logging, LOG_LEVEL))
 ログは「書いておしまい」ではなく、**「読む時に役立つか」**で価値が決まります。
 
 深夜3時の障害対応で、「ログがあってよかった」と思えるログ設計を目指しましょう。
+
+---
+
+## 関連記事
+
+- [なぜ「キュー（Queue）」を入れると、人間の仕事が減るのか](/posts/queue-reduces-human-work/) — ログと同じく「人間の判断を減らす」設計思想
+- [非同期処理の責任境界](/posts/producer-consumer-responsibility-boundary/) — 分散システムでのログ相関ID設計の背景
+- [データベーストラブルシューティング完全ガイド](/posts/database-troubleshooting-complete-guide/) — ログを活用した障害調査の実践
