@@ -1,5 +1,5 @@
 ---
-title: "【保存版】dotfiles運用の最終形：Shell / Ansible / AI（Claude CLI）を組み合わせた"壊れない開発環境""
+title: "【保存版】dotfiles運用の最終形：Shell / Ansible / AI（Claude CLI）を組み合わせた壊れない開発環境"
 date: 2026-01-02
 draft: false
 tags: ["dotfiles", "Ansible", "Claude CLI", "シェルスクリプト", "開発環境", "自動化", "DevOps"]
