@@ -110,32 +110,35 @@ Obsidianは、普通に使えばナレッジベースだ。メモを書き、リ
 ノートは「読むためのドキュメント」ではない。
 ノートは「プロンプトをコンパイルするためのソースコード」だ。
 
-```
-┌─────────────────────────────────────────┐
-│  Obsidian（Prompt Factory）             │
-│  ┌─────────────────────────────────────┐ │
-│  │ Frontmatter（変数・メタデータ）    │ │
-│  │ + テンプレート（プロンプト構造）    │ │
-│  │ + 過去の判断・制約（Dataview参照）  │ │
-│  └─────────────────────────────────────┘ │
-│                  ↓ コンパイル            │
-│  ┌─────────────────────────────────────┐ │
-│  │ 最終プロンプト（Claude CLI用）     │ │
-│  └─────────────────────────────────────┘ │
-└─────────────────────────────────────────┘
-                   ↓
-┌─────────────────────────────────────────┐
-│  Claude CLI（生成エンジン）             │
-│  - プロンプトを受け取り                 │
-│  - Ansible playbookを生成               │
-└─────────────────────────────────────────┘
-                   ↓
-┌─────────────────────────────────────────┐
-│  Ansible（実行器）                      │
-│  - --check で事前確認                   │
-│  - --diff で変更差分確認                │
-│  - 問題なければ適用                     │
-└─────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph Obsidian["Obsidian（Prompt Factory）"]
+        direction TB
+        FM["Frontmatter（変数・メタデータ）"]
+        TPL["テンプレート（プロンプト構造）"]
+        DV["過去の判断・制約（Dataview参照）"]
+        FM --> Compile
+        TPL --> Compile
+        DV --> Compile
+        Compile["コンパイル"] --> FinalPrompt["最終プロンプト"]
+    end
+
+    subgraph Claude["Claude CLI（生成エンジン）"]
+        direction TB
+        Receive["プロンプトを受け取り"]
+        Generate["Ansible playbookを生成"]
+        Receive --> Generate
+    end
+
+    subgraph Ansible["Ansible（実行器）"]
+        direction TB
+        Check["--check で事前確認"]
+        Diff["--diff で変更差分確認"]
+        Apply["問題なければ適用"]
+        Check --> Diff --> Apply
+    end
+
+    Obsidian --> Claude --> Ansible
 ```
 
 **Obsidianはコンパイラ。Claudeは生成器。Ansibleは実行器。**
@@ -300,27 +303,21 @@ LIMIT 5
 
 ### 構成要素の関係図
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                    Obsidian Vault                       │
-│                                                         │
-│  ┌───────────────┐    ┌───────────────────────────────┐ │
-│  │   QuickAdd    │───▶│      Frontmatter（変数）      │ │
-│  │  （入力UI）   │    │  target, os, constraints...   │ │
-│  └───────────────┘    └───────────────────────────────┘ │
-│                                   │                     │
-│                                   ▼                     │
-│  ┌───────────────┐    ┌───────────────────────────────┐ │
-│  │   Dataview    │───▶│      Templater（展開）        │ │
-│  │（過去の判断） │    │  テンプレート + 変数 → 最終形 │ │
-│  └───────────────┘    └───────────────────────────────┘ │
-│                                   │                     │
-│                                   ▼                     │
-│                       ┌───────────────────────────────┐ │
-│                       │     最終プロンプト（出力）    │ │
-│                       │  Claude CLI にコピペ or パイプ│ │
-│                       └───────────────────────────────┘ │
-└─────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph Vault["Obsidian Vault"]
+        direction TB
+        QuickAdd["QuickAdd<br/>（入力UI）"]
+        Frontmatter["Frontmatter（変数）<br/>target, os, constraints..."]
+        Dataview["Dataview<br/>（過去の判断）"]
+        Templater["Templater（展開）<br/>テンプレート + 変数 → 最終形"]
+        Output["最終プロンプト（出力）<br/>Claude CLI にコピペ or パイプ"]
+
+        QuickAdd --> Frontmatter
+        Frontmatter --> Templater
+        Dataview --> Templater
+        Templater --> Output
+    end
 ```
 
 ---
@@ -618,25 +615,19 @@ _templates/
 
 どんなに良いプロンプトでも、生成物を無条件に適用しない。
 
-```
-[プロンプト生成] → [Claude CLI実行] → [YAML生成]
-                                          ↓
-                        ┌─────────────────────────────┐
-                        │  ゲート1: ansible-lint      │
-                        │  → 静的解析パス？          │
-                        └─────────────────────────────┘
-                                          ↓ Yes
-                        ┌─────────────────────────────┐
-                        │  ゲート2: --check --diff    │
-                        │  → 変更内容は妥当？        │
-                        └─────────────────────────────┘
-                                          ↓ Yes
-                        ┌─────────────────────────────┐
-                        │  ゲート3: 人間のレビュー    │
-                        │  → この変更を適用する？    │
-                        └─────────────────────────────┘
-                                          ↓ Yes
-                                       [適用]
+```mermaid
+flowchart TB
+    PromptGen["プロンプト生成"] --> ClaudeCLI["Claude CLI実行"] --> YAML["YAML生成"]
+    YAML --> Gate1{"ゲート1: ansible-lint<br/>静的解析パス？"}
+    Gate1 -->|Yes| Gate2{"ゲート2: --check --diff<br/>変更内容は妥当？"}
+    Gate1 -->|No| Fix1["修正"]
+    Fix1 --> YAML
+    Gate2 -->|Yes| Gate3{"ゲート3: 人間のレビュー<br/>この変更を適用する？"}
+    Gate2 -->|No| Fix2["修正"]
+    Fix2 --> ClaudeCLI
+    Gate3 -->|Yes| Apply["適用"]
+    Gate3 -->|No| Fix3["修正"]
+    Fix3 --> ClaudeCLI
 ```
 
 **ルール**：3つのゲートすべてを通過しないと適用しない。
